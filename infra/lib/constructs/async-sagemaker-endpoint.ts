@@ -27,6 +27,12 @@ export interface AsyncSagemakerEndpointProps {
    * customer-input-bearing resources share a single key.
    */
   cmk: kms.IKey;
+  /**
+   * Optional project name used as a physical-name prefix for the endpoint.
+   * Forks/renames pass this in from the consuming stack so the endpoint name
+   * tracks the single source of truth in `cdk.json`.
+   */
+  projectName?: string;
 }
 
 export class AsyncSagemakerEndpoint extends Construct {
@@ -105,7 +111,7 @@ export class AsyncSagemakerEndpoint extends Construct {
 
     // --- Endpoint ---
     // Endpoint name kept stable — dispatcher references it via stack output.
-    const endpointName = `${suffixedModelName}-endpoint`;
+    const endpointName = props.projectName ? `${props.projectName}-${suffixedModelName}-endpoint` : `${suffixedModelName}-endpoint`;
     const endpoint = new sagemaker.CfnEndpoint(this, 'Endpoint', {
       endpointName,
       endpointConfigName: endpointConfig.attrEndpointConfigName,

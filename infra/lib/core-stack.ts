@@ -15,13 +15,14 @@ export class CoreStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: CoreStackProps) {
     super(scope, id, props);
 
+    const projectName = this.node.tryGetContext('projectName') as string ?? 'shrouded-inference';
     const envName = props?.envName ?? 'prod';
     const suffix = props?.nameSuffix ?? '';
     const isProd = envName === 'prod';
 
     // --------------- ECR Repositories ---------------
 
-    const repoNames = ['dispatcher', 'graphsage-inference', 'equiformer-inference'];
+    const repoNames = [`${projectName}-dispatcher`, `${projectName}-graphsage-inference`, `${projectName}-equiformer-inference`];
     const repos: ecr.Repository[] = [];
 
     for (const name of repoNames) {
@@ -43,7 +44,7 @@ export class CoreStack extends cdk.Stack {
     // --------------- S3 Bucket ---------------
 
     const modelArtifactsBucket = new s3.Bucket(this, 'ModelArtifactsBucket', {
-      bucketName: `secure-gnn-model-artifacts-${this.account}${suffix}`,
+      bucketName: `${projectName}-model-artifacts-${this.account}${suffix}`,
       removalPolicy: isProd ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: !isProd,
       versioned: true,

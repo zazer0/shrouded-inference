@@ -18,17 +18,19 @@ export class ModelSmallStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ModelSmallStackProps) {
     super(scope, id, props);
 
+    const projectName = this.node.tryGetContext('projectName') as string ?? 'shrouded-inference';
     const suffix = props.nameSuffix ?? '';
     const endpoint = new AsyncSagemakerEndpoint(this, 'GraphSageEndpoint', {
       modelName: 'graphsage-small',
       instanceType: 'ml.m5.large',
-      imageUri: `${this.account}.dkr.ecr.${this.region}.amazonaws.com/graphsage-inference${suffix}:${props.imageTag}`,
-      modelDataUrl: `s3://secure-gnn-model-artifacts-${this.account}${suffix}/graphsage/model-v2.tar.gz`,
+      imageUri: `${this.account}.dkr.ecr.${this.region}.amazonaws.com/${projectName}-graphsage-inference${suffix}:${props.imageTag}`,
+      modelDataUrl: `s3://${projectName}-model-artifacts-${this.account}${suffix}/graphsage/model-v2.tar.gz`,
       asyncOutputBucket: props.asyncIoBucket,
       cmk: props.cmk,
       maxConcurrentInvocationsPerInstance: 4,
       maxInstanceCount: 1,
       nameSuffix: props.nameSuffix,
+      projectName,
     });
 
     this.endpointName = endpoint.endpointName;

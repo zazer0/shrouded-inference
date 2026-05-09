@@ -6,8 +6,10 @@ export class BuildCacheStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
+    const projectName = this.node.tryGetContext('projectName') as string ?? 'shrouded-inference';
+
     const cacheRepo = new ecr.Repository(this, 'equiformer-cache-repo', {
-      repositoryName: 'equiformer-cache',
+      repositoryName: `${projectName}-equiformer-cache`,
       imageTagMutability: ecr.TagMutability.MUTABLE,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });

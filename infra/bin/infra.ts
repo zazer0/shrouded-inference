@@ -22,6 +22,16 @@ const env = {
 const envName = app.node.tryGetContext('env') ?? 'prod';
 const suffix = envName === 'prod' ? '' : `-${envName}`;
 
+// Project name is the single source of truth for physical naming across
+// all stacks. Source of truth lives in `cdk.json` context; forks/renames
+// only need to change it in one place. `pascalProjectName` derives the
+// PascalCase form used for CFN stack names.
+const projectName = app.node.tryGetContext('projectName') as string ?? 'shrouded-inference';
+const pascalProjectName = projectName
+  .split('-')
+  .map((s: string) => s.charAt(0).toUpperCase() + s.slice(1))
+  .join('');
+
 // Image tag for SageMaker Model imageUri. CI passes --context imageTag=${{ github.sha }};
 // local dev can export CDK_IMAGE_TAG=$(git rev-parse HEAD) for synth. Falling through to
 // 'latest' is a synth-only convenience — production deploy paths must always pass an
@@ -29,26 +39,26 @@ const suffix = envName === 'prod' ? '' : `-${envName}`;
 const imageTag = app.node.tryGetContext('imageTag') ?? process.env.CDK_IMAGE_TAG ?? 'latest';
 
 new CoreStack(app, `CoreStack${suffix}`, {
-  stackName: `SecureGnnCoreStack${suffix}`,
+  stackName: `${pascalProjectName}CoreStack${suffix}`,
   env,
   envName,
   nameSuffix: suffix,
 });
 
 export const storageStack = new StorageStack(app, `StorageStack${suffix}`, {
-  stackName: `SecureGnnStorageStack${suffix}`,
+  stackName: `${pascalProjectName}StorageStack${suffix}`,
   env,
   envName,
   nameSuffix: suffix,
 });
 
 // SecretsStack is prod-only. The api-keys secret + the merger CR are owned
-// solely by the prod stack; ephemeral envs import the same `gnn-serving/api-keys`
+// solely by the prod stack; ephemeral envs import the same `${projectName}/api-keys`
 // secret by name in DispatcherStack. Mirrors the GithubOidcStack prod-only gate
 // at the bottom of this file. See worklog 026 for the regressions this fixes.
 if (envName === 'prod') {
   new SecretsStack(app, `SecretsStack${suffix}`, {
-    stackName: `SecureGnnSecretsStack${suffix}`,
+    stackName: `${pascalProjectName}SecretsStack${suffix}`,
     env,
     envName,
     nameSuffix: suffix,
@@ -56,7 +66,7 @@ if (envName === 'prod') {
 }
 
 export const modelSmallStack = new ModelSmallStack(app, `ModelSmallStack${suffix}`, {
-  stackName: `SecureGnnModelSmallStack${suffix}`,
+  stackName: `${pascalProjectName}ModelSmallStack${suffix}`,
   env,
   asyncIoBucket: storageStack.asyncIoBucket,
   cmk: storageStack.cmk,
@@ -66,7 +76,7 @@ export const modelSmallStack = new ModelSmallStack(app, `ModelSmallStack${suffix
 });
 
 export const modelLargeStack = new ModelLargeStack(app, `ModelLargeStack${suffix}`, {
-  stackName: `SecureGnnModelLargeStack${suffix}`,
+  stackName: `${pascalProjectName}ModelLargeStack${suffix}`,
   env,
   asyncIoBucket: storageStack.asyncIoBucket,
   cmk: storageStack.cmk,
@@ -76,13 +86,13 @@ export const modelLargeStack = new ModelLargeStack(app, `ModelLargeStack${suffix
 });
 
 new DispatcherStack(app, `DispatcherStack${suffix}`, {
-  stackName: `SecureGnnDispatcherStack${suffix}`,
+  stackName: `${pascalProjectName}DispatcherStack${suffix}`,
   env,
   asyncIoBucket: storageStack.asyncIoBucket,
   cmk: storageStack.cmk,
   // Import the prod-managed secret by name (no cross-stack ref). Same name in
   // every env: prod owns the lifecycle, ephemeral envs read-only-share it.
-  apiKeysSecretName: 'gnn-serving/api-keys',
+  apiKeysSecretName: `${projectName}/api-keys`,
   telemetryTable: storageStack.telemetryTable,
   smallEndpointName: modelSmallStack.endpointName,
   largeEndpointName: modelLargeStack.endpointName,
@@ -92,19 +102,19 @@ new DispatcherStack(app, `DispatcherStack${suffix}`, {
 });
 
 // OIDC provider + role are global singletons keyed on a fixed role name
-// (`gnn-serving-github-actions-deploy`). Instantiating per-env would conflict
+// (`${projectName}-github-actions-deploy`). Instantiating per-env would conflict
 // on the role; the prod role is reused across ephemeral envs via its widened
 // trust pattern.
 if (envName === 'prod') {
   new GithubOidcStack(app, `GithubOidcStack${suffix}`, {
-    stackName: `SecureGnnGithubOidcStack${suffix}`,
+    stackName: `${pascalProjectName}GithubOidcStack${suffix}`,
     env,
     envName,
     nameSuffix: suffix,
   });
 
   new BuildCacheStack(app, 'BuildCacheStack', {
-    stackName: 'SecureGnnBuildCacheStack',
+    stackName: `${pascalProjectName}BuildCacheStack`,
     env,
   });
 }

@@ -23,7 +23,7 @@ interface DispatcherStackProps extends cdk.StackProps {
   /**
    * Name (NOT ARN) of the secret holding the SHA256(api-key) → tier map.
    * Resolved internally via `Secret.fromSecretNameV2`. Same name in every env
-   * (`gnn-serving/api-keys`); prod owns the lifecycle in `SecretsStack`.
+   * (`${projectName}/api-keys`); prod owns the lifecycle in `SecretsStack`.
    */
   apiKeysSecretName: string;
   telemetryTable: dynamodb.ITable;
@@ -44,6 +44,8 @@ interface DispatcherStackProps extends cdk.StackProps {
 export class DispatcherStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: DispatcherStackProps) {
     super(scope, id, props);
+
+    const projectName = this.node.tryGetContext('projectName') as string ?? 'shrouded-inference';
 
     // Import the api-keys secret by name. Prod's SecretsStack owns it;
     // ephemeral envs share the exact same secret so dispatcher auth is
@@ -108,7 +110,7 @@ export class DispatcherStack extends cdk.Stack {
     const dispatcherRepo = ecr.Repository.fromRepositoryName(
       this,
       'DispatcherRepo',
-      `dispatcher${props.nameSuffix ?? ''}`,
+      `${projectName}-dispatcher${props.nameSuffix ?? ''}`,
     );
 
     taskDef.addContainer('dispatcher', {

@@ -19,6 +19,7 @@ export class StorageStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: StorageStackProps) {
     super(scope, id, props);
 
+    const projectName = this.node.tryGetContext('projectName') as string ?? 'shrouded-inference';
     const envName = props?.envName ?? 'prod';
     const suffix = props?.nameSuffix ?? '';
     const isProd = envName === 'prod';
@@ -34,11 +35,11 @@ export class StorageStack extends cdk.Stack {
       enableKeyRotation: true,
       removalPolicy: isProd ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
       pendingWindow: cdk.Duration.days(7),
-      alias: `alias/gnn-customer-input${suffix}`,
+      alias: `alias/${projectName}-customer-input${suffix}`,
     });
 
     this.asyncIoBucket = new s3.Bucket(this, 'AsyncIoBucket', {
-      bucketName: `async-io-${this.account}${suffix}`,
+      bucketName: `${projectName}-async-io-${this.account}${suffix}`,
       removalPolicy: isProd ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: !isProd,
       encryption: s3.BucketEncryption.KMS,

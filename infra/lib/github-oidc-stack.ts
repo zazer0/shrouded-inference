@@ -15,6 +15,8 @@ export class GithubOidcStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: GithubOidcStackProps) {
     super(scope, id, props);
 
+    const projectName = this.node.tryGetContext('projectName') as string ?? 'shrouded-inference';
+
     const githubRepo =
       process.env.GITHUB_REPOSITORY ??
       (this.node.tryGetContext('githubRepo') as string | undefined);
@@ -29,14 +31,17 @@ export class GithubOidcStack extends cdk.Stack {
       );
     }
 
-    const oidcProvider = new iam.OpenIdConnectProvider(this, 'GithubOidcProvider', {
-      url: 'https://token.actions.githubusercontent.com',
-      clientIds: ['sts.amazonaws.com'],
-      thumbprints: ['6938fd4d98bab03faadb97b34396831e3780aea1'],
-    });
+    // AWS only allows ONE OIDC provider per URL per account; importing the
+    // existing provider avoids "EntityAlreadyExists" when this stack is
+    // deployed alongside other projects already using GitHub OIDC.
+    const oidcProvider = iam.OpenIdConnectProvider.fromOpenIdConnectProviderArn(
+      this,
+      'GithubOidcProvider',
+      `arn:aws:iam::${this.account}:oidc-provider/token.actions.githubusercontent.com`,
+    );
 
     const deployRole = new iam.Role(this, 'GithubActionsDeployRole', {
-      roleName: 'gnn-serving-github-actions-deploy',
+      roleName: `${projectName}-github-actions-deploy`,
       assumedBy: new iam.FederatedPrincipal(
         oidcProvider.openIdConnectProviderArn,
         {

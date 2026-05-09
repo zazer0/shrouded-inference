@@ -15,19 +15,19 @@ export interface SecretsStackProps extends cdk.StackProps {
 /**
  * Manages the two API-key secrets used by the dispatcher.
  *
- *  - `gnn-serving/api-keys`     — map of SHA-256(api_key) → {tier, user_id?}
- *  - `gnn-serving/raw-api-keys` — map of tier-name → raw api key string
+ *  - `${projectName}/api-keys`     — map of SHA-256(api_key) → {tier, user_id?}
+ *  - `${projectName}/raw-api-keys` — map of tier-name → raw api key string
  *
  * Historically these secrets were created out-of-band via the AWS CLI; only
- * the `gnn-serving/api-keys` placeholder has ever been managed by this stack
+ * the `${projectName}/api-keys` placeholder has ever been managed by this stack
  * (with no CDK-side value generation). Existing `small` and `large` entries
  * therefore live in production state that CDK does not own and must not
  * disturb.
  *
- * `gnn-serving/raw-api-keys` is intentionally **shared (unsuffixed) across
+ * `${projectName}/raw-api-keys` is intentionally **shared (unsuffixed) across
  * envs** — it is the single source of truth for raw key material. Every env
  * (prod and ephemeral) imports the same secret by name. Per-env hashed maps
- * (`gnn-serving/api-keys${suffix}`) get seeded with hashes of those shared
+ * (`${projectName}/api-keys${suffix}`) get seeded with hashes of those shared
  * raw values, so authentication is identical across envs without ever
  * persisting secret material in CDK templates or context.
  *
@@ -44,12 +44,14 @@ export class SecretsStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: SecretsStackProps) {
     super(scope, id, props);
 
+    const projectName = this.node.tryGetContext('projectName') as string ?? 'shrouded-inference';
+
     // This stack is now prod-only (gated in `bin/infra.ts`). The api-keys
     // (hash → tier) secret is unsuffixed — there is exactly one across the
     // whole account. Ephemeral envs read it by name in DispatcherStack.
     // RETAIN is preserved so the historical placeholder is never destroyed.
     this.apiKeysSecret = new secretsmanager.Secret(this, 'ApiKeysSecret', {
-      secretName: 'gnn-serving/api-keys',
+      secretName: `${projectName}/api-keys`,
       description: 'API key SHA256 hashes mapped to tier/user metadata',
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
@@ -59,11 +61,11 @@ export class SecretsStack extends cdk.Stack {
     // raw key material. Import it by name so we can grant the merger Lambda
     // read/write access without trying to take ownership of the existing
     // CFN-untracked resource. Note: no `${suffix}` here — every env imports
-    // the same `gnn-serving/raw-api-keys`.
+    // the same `${projectName}/raw-api-keys`.
     this.rawApiKeysSecret = secretsmanager.Secret.fromSecretNameV2(
       this,
       'RawApiKeysSecret',
-      'gnn-serving/raw-api-keys',
+      `${projectName}/raw-api-keys`,
     );
 
     // ------------------------------------------------------------------
@@ -100,7 +102,7 @@ export class SecretsStack extends cdk.Stack {
           this.apiKeysSecret.secretArn,
           // imported secret has no exported ARN with version suffix; scope
           // by name pattern instead.
-          `arn:aws:secretsmanager:${this.region}:${this.account}:secret:gnn-serving/raw-api-keys-*`,
+          `arn:aws:secretsmanager:${this.region}:${this.account}:secret:${projectName}/raw-api-keys-*`,
         ],
       }),
     );
@@ -114,7 +116,7 @@ export class SecretsStack extends cdk.Stack {
       resourceType: 'Custom::ApiKeysAllTierMerge',
       properties: {
         ApiKeysSecretArn: this.apiKeysSecret.secretArn,
-        RawApiKeysSecretName: 'gnn-serving/raw-api-keys',
+        RawApiKeysSecretName: `${projectName}/raw-api-keys`,
         TierName: tierName,
         // Bump this string to force a re-run (e.g. to rotate the key).
         Version: '1',
@@ -154,7 +156,7 @@ export class SecretsStack extends cdk.Stack {
           ],
           resources: [
             this.apiKeysSecret.secretArn,
-            `arn:aws:secretsmanager:${this.region}:${this.account}:secret:gnn-serving/raw-api-keys-*`,
+            `arn:aws:secretsmanager:${this.region}:${this.account}:secret:${projectName}/raw-api-keys-*`,
           ],
         }),
       );
@@ -169,7 +171,7 @@ export class SecretsStack extends cdk.Stack {
           resourceType: 'Custom::ApiKeysEphemeralSeed',
           properties: {
             ApiKeysSecretArn: this.apiKeysSecret.secretArn,
-            RawApiKeysSecretName: 'gnn-serving/raw-api-keys',
+            RawApiKeysSecretName: `${projectName}/raw-api-keys`,
             TierName: tier,
             Version: '1',
           },
@@ -188,13 +190,13 @@ const ALL_TIER_MERGE_LAMBDA_SRC = `
 OnEvent handler for the Custom::ApiKeysAllTierMerge custom resource.
 
 Invariants (rely on these — do not duplicate-defend):
-  - Created exactly once, in SecureGnnSecretsStack on prod (gated in
+  - Created exactly once, in the SecretsStack on prod (gated in
     bin/infra.ts). Never instantiated for ephemeral envs.
   - Therefore every event this handler sees corresponds to the prod
     stack's lifecycle. There is no per-env multiplicity to reason about.
   - Owns the 'all' tier hash in the prod-managed
-    gnn-serving/api-keys secret AND the 'all' raw-key in the shared
-    gnn-serving/raw-api-keys secret. No other code path writes either
+    \${projectName}/api-keys secret AND the 'all' raw-key in the shared
+    \${projectName}/raw-api-keys secret. No other code path writes either
     of those two specific entries.
 
 The 'all' raw key is deterministically DERIVED from the existing
