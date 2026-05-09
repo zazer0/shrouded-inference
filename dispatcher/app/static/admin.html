@@ -1,0 +1,664 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GNN Inference Admin</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --border: #d8dde3;
+      --text: #1a1f2c;
+      --muted: #6b7280;
+      --accent: #2c5fd5;
+      --accent-hover: #1f48a8;
+      --error: #b42318;
+      --approved: #15803d;
+      --rejected: #b42318;
+      --skipped: #6b7280;
+      --pending: #b45309;
+      --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+    main { max-width: 960px; margin: 0 auto; }
+    h1 { font-size: 22px; margin: 0; }
+    h2 { font-size: 15px; margin: 24px 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .subtitle { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+    .legend-line { color: var(--muted); font-size: 12.5px; margin: 0 0 6px; }
+    .legend-line code { font-family: var(--mono); font-size: 12px; background: #eef2ff; color: #3730a3; padding: 0 4px; border-radius: 3px; }
+    .header-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin: 0 0 16px;
+    }
+    .header-row .h1-group { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+    .header-row a { color: var(--accent); text-decoration: none; font-size: 13px; }
+    .header-row a:hover { text-decoration: underline; }
+    .env-badge {
+      background: #eef2ff;
+      color: #3730a3;
+      padding: 1px 8px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: var(--mono);
+    }
+    .env-badge.is-empty { display: none; }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 16px;
+    }
+    .row { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+    .row label { min-width: 90px; color: var(--muted); }
+    input[type="password"], input[type="text"], button {
+      font-family: inherit;
+      font-size: 14px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: white;
+      color: var(--text);
+    }
+    input[type="password"], input[type="text"] { flex: 1; min-width: 240px; }
+    button {
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+      cursor: pointer;
+      font-weight: 600;
+      padding: 9px 18px;
+    }
+    button:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    #cleanupBtn {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      font-weight: 500;
+    }
+    #cleanupBtn:hover:not(:disabled) {
+      background: #f1f5f9;
+      color: var(--text);
+      border-color: var(--border);
+    }
+    .err { color: var(--error); font-family: var(--mono); font-size: 13px; margin-top: 8px; min-height: 1.2em; white-space: pre-wrap; }
+    .meta { color: var(--muted); font-size: 12.5px; margin-top: 12px; }
+    .empty {
+      color: var(--muted);
+      font-style: italic;
+      padding: 16px;
+      background: var(--panel);
+      border: 1px dashed var(--border);
+      border-radius: 6px;
+    }
+    .buckets { display: flex; flex-direction: column; gap: 12px; }
+    .bucket {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 14px 16px;
+    }
+    .bucket-head {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    .bucket-head .model {
+      font-family: var(--mono);
+      font-weight: 600;
+      font-size: 13px;
+      word-break: break-all;
+    }
+    .bucket-head .tier {
+      background: #eef2ff;
+      color: #3730a3;
+      padding: 1px 8px;
+      border-radius: 10px;
+      font-size: 12px;
+    }
+    .bucket-head .total { margin-left: auto; color: var(--muted); font-size: 12.5px; }
+    .bar {
+      display: flex;
+      width: 100%;
+      height: 18px;
+      border-radius: 4px;
+      overflow: hidden;
+      background: #e5e7eb;
+    }
+    .bar > span { display: block; height: 100%; border-right: 1px solid #ffffff; }
+    .bar > span:last-child { border-right: 0; }
+    .bar > .seg-approved { background: var(--approved); }
+    .bar > .seg-rejected { background: var(--rejected); }
+    .bar > .seg-skipped  { background: var(--skipped); }
+    .bar > .seg-pending  { background: var(--pending); }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 8px;
+      font-size: 12.5px;
+      color: var(--muted);
+    }
+    .legend .swatch {
+      display: inline-block;
+      width: 10px; height: 10px;
+      border-radius: 2px;
+      margin-right: 4px;
+      vertical-align: middle;
+    }
+    .counts-row { display: flex; gap: 16px; margin-top: 10px; flex-wrap: wrap; }
+    .counts-row table.counts { flex: 1 1 0; min-width: 200px; }
+    table.counts {
+      border-collapse: collapse;
+      font-size: 12.5px;
+      width: 100%;
+    }
+    table.counts th, table.counts td {
+      text-align: left;
+      padding: 4px 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    table.counts th { color: var(--muted); font-weight: 500; }
+    table.counts td.num { font-family: var(--mono); text-align: right; }
+    .metric-strip {
+      display: flex;
+      gap: 12px;
+      margin: 16px 0 20px;
+    }
+    .metric {
+      flex: 1;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 14px 16px;
+    }
+    .metric-label { color: var(--muted); font-size: 12px; }
+    .metric-value { font-size: 24px; font-weight: 600; margin-top: 4px; }
+    .metric:first-child .metric-value { color: var(--approved); }
+    .model-group {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .model-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding-bottom: 12px;
+      margin-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .model-head .model { font-family: var(--mono); font-size: 14px; }
+    .model-head .model-summary { color: var(--muted); font-size: 12px; }
+    .model-group .bucket { background: transparent; border: none; padding: 8px 0; margin-bottom: 0; }
+    .model-group .bucket + .bucket { border-top: 1px solid var(--border); padding-top: 12px; }
+    .model-group .bucket-head .model { display: none; }
+    .endpoint-pill {
+      font-size: 11px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: rgba(108, 117, 125, 0.15);
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .endpoint-pill strong { font-weight: 700; margin-right: 4px; }
+    .endpoint-pill .pulse {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+      vertical-align: middle;
+      margin-right: 5px;
+    }
+    .endpoint-state-cold { background: color-mix(in srgb, var(--muted) 14%, transparent); color: var(--muted); }
+    .endpoint-state-warming { background: color-mix(in srgb, var(--pending) 18%, transparent); color: var(--pending); }
+    .endpoint-state-warm { background: color-mix(in srgb, var(--approved) 18%, transparent); color: var(--approved); }
+    .endpoint-state-failed { background: color-mix(in srgb, var(--rejected) 18%, transparent); color: var(--rejected); }
+    .endpoint-state-warming .pulse { animation: endpoint-pulse 1.2s ease-in-out infinite; }
+    @keyframes endpoint-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="header-row">
+      <div class="h1-group">
+        <h1>GNN Inference Admin</h1>
+        <span id="envBadge" class="env-badge is-empty"></span>
+      </div>
+      <a href="/index.html">&larr; Back to demo</a>
+    </div>
+    <p class="subtitle">Per-(model, tier) verdict aggregates. Acceptance rate is the model-quality signal that drives retraining and per-customer pricing.</p>
+
+    <div class="panel">
+      <div class="row">
+        <label for="apiKey">API key</label>
+        <input id="apiKey" type="password" autocomplete="off" placeholder="paste 'all'-tier API key">
+        <button id="refreshBtn" type="button">Refresh</button>
+        <button id="cleanupBtn" type="button" title="Flip stale 'running' telemetry rows older than the timebox to 'abandoned'.">Cleanup abandoned</button>
+      </div>
+      <div class="err" id="errorMsg"></div>
+      <div class="meta" id="meta"></div>
+      <div class="meta" id="cleanupMeta"></div>
+    </div>
+
+    <section class="metric-strip" aria-label="Aggregate metrics">
+      <div class="metric">
+        <div class="metric-label">Acceptance rate</div>
+        <div class="metric-value" id="metricAcceptance">—</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Total inferences served</div>
+        <div class="metric-value" id="metricTotal">—</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Active customers</div>
+        <div class="metric-value" id="metricUsers">—</div>
+      </div>
+    </section>
+
+    <h2>Per-(model_version, tier) buckets</h2>
+    <p class="legend-line"><code>model</code> = git SHA of the inference image; one row per (model, tier) pair.</p>
+    <p class="legend-line">endpoint pill: <code>cold</code> = 0 instances; <code>warming</code> = scaling up (current &lt; desired); <code>warm</code> = ready to serve.</p>
+    <p class="legend-line">unannotated: inference completed, awaiting reviewer verdict; running: inference still executing; skipped: customer regenerated before verdict; abandoned: pending &gt; 24h, eligible for cleanup.</p>
+    <div id="content">
+      <div class="empty" id="emptyHint">Enter the all-tier API key and click Refresh.</div>
+    </div>
+  </main>
+
+  <script>
+    const STORAGE_KEY = "gnn_admin_api_key";
+    const REFRESH_FAST_MS = 60_000;
+    const REFRESH_SLOW_MS = 600_000;
+    let refreshTimer = null;
+    let lastCadenceMs = REFRESH_SLOW_MS;
+
+    const apiKeyEl = document.getElementById("apiKey");
+    const refreshBtn = document.getElementById("refreshBtn");
+    const errorEl = document.getElementById("errorMsg");
+    const metaEl = document.getElementById("meta");
+    const envBadgeEl = document.getElementById("envBadge");
+    const contentEl = document.getElementById("content");
+
+    apiKeyEl.value = localStorage.getItem(STORAGE_KEY) || "";
+    apiKeyEl.addEventListener("blur", () => localStorage.setItem(STORAGE_KEY, apiKeyEl.value));
+    apiKeyEl.addEventListener("change", () => localStorage.setItem(STORAGE_KEY, apiKeyEl.value));
+    refreshBtn.addEventListener("click", () => fetchMetrics());
+
+    function isTransientEndpoint(ep) {
+      if (!ep) return false;
+      if (ep.status === "Updating" || ep.status === "Creating") return true;
+      if (ep.current_instances != null && ep.desired_instances != null &&
+          ep.current_instances < ep.desired_instances) return true;
+      if (ep.current_instances === 0 && (ep.in_flight ?? 0) > 0) return true;
+      return false;
+    }
+
+    function scheduleNextRefresh(cadenceMs) {
+      lastCadenceMs = cadenceMs;
+      if (refreshTimer != null) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        if (apiKeyEl.value.trim()) fetchMetrics();
+        else scheduleNextRefresh(REFRESH_SLOW_MS);
+      }, cadenceMs);
+    }
+
+    function cadenceLabel(ms) {
+      if (ms === REFRESH_FAST_MS) return "1m";
+      if (ms === REFRESH_SLOW_MS) return "10m";
+      return `${Math.round(ms / 1000)}s`;
+    }
+
+    const cleanupBtn = document.getElementById("cleanupBtn");
+    const cleanupMetaEl = document.getElementById("cleanupMeta");
+    cleanupBtn.addEventListener("click", () => cleanupAbandoned());
+
+    async function cleanupAbandoned() {
+      const key = apiKeyEl.value.trim();
+      errorEl.textContent = "";
+      cleanupMetaEl.textContent = "";
+      if (!key) {
+        errorEl.textContent = "Enter the all-tier API key first.";
+        return;
+      }
+      if (!confirm("Flip all stale 'running' rows older than the timebox to 'abandoned'? This updates DynamoDB.")) return;
+      cleanupBtn.disabled = true;
+      refreshBtn.disabled = true;
+      try {
+        const resp = await fetch("/v1/admin/cleanup-abandoned", {
+          method: "POST",
+          headers: { "X-Api-Key": key },
+        });
+        if (!resp.ok) {
+          let detail = `HTTP ${resp.status}`;
+          try {
+            const body = await resp.json();
+            if (body && body.detail) detail += ` — ${typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail)}`;
+          } catch { /* non-JSON */ }
+          errorEl.textContent = `Cleanup failed: ${detail}`;
+          return;
+        }
+        const body = await resp.json();
+        cleanupMetaEl.textContent = `Cleanup: scanned ${body.scanned}, flipped ${body.flipped} → abandoned, ${body.skipped_recent} still within timebox.`;
+        fetchMetrics();
+      } catch (e) {
+        errorEl.textContent = `Network error during cleanup: ${e.message}`;
+      } finally {
+        cleanupBtn.disabled = false;
+        refreshBtn.disabled = false;
+      }
+    }
+
+    async function fetchMetrics() {
+      const key = apiKeyEl.value.trim();
+      errorEl.textContent = "";
+      if (!key) {
+        renderEmpty("Enter the all-tier API key and click Refresh.");
+        metaEl.textContent = "";
+        scheduleNextRefresh(REFRESH_SLOW_MS);
+        return;
+      }
+      refreshBtn.disabled = true;
+      let nextCadence = REFRESH_SLOW_MS;
+      try {
+        const resp = await fetch("/v1/admin/metrics", { headers: { "X-Api-Key": key } });
+        if (resp.status === 401) {
+          renderEmpty("Invalid API key — check the value and try again.");
+          metaEl.textContent = "";
+          return;
+        }
+        if (resp.status === 403) {
+          renderEmpty("This dashboard requires the 'all'-tier API key. The key you provided is for a different tier.");
+          metaEl.textContent = "";
+          return;
+        }
+        if (!resp.ok) {
+          let detail = `HTTP ${resp.status}`;
+          try {
+            const body = await resp.json();
+            if (body && body.detail) detail += ` — ${typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail)}`;
+          } catch { /* non-JSON */ }
+          errorEl.textContent = `Failed to load metrics: ${detail}`;
+          return;
+        }
+        const body = await resp.json();
+        const agg = body.aggregates || {};
+        document.getElementById("metricAcceptance").textContent =
+          agg.acceptance_rate == null ? "—" : `${Math.round(agg.acceptance_rate * 100)}%`;
+        document.getElementById("metricTotal").textContent =
+          Number.isFinite(agg.total_inferences) ? String(agg.total_inferences) : "—";
+        document.getElementById("metricUsers").textContent =
+          Number.isFinite(agg.active_users) ? String(agg.active_users) : "—";
+        renderBuckets(body.buckets || [], body.endpoints || []);
+        const envName = body.env || "";
+        if (envName) {
+          envBadgeEl.textContent = envName;
+          envBadgeEl.classList.remove("is-empty");
+        } else {
+          envBadgeEl.textContent = "";
+          envBadgeEl.classList.add("is-empty");
+        }
+        const fastMode = (body.endpoints || []).some(isTransientEndpoint);
+        nextCadence = fastMode ? REFRESH_FAST_MS : REFRESH_SLOW_MS;
+        metaEl.textContent = `Last refreshed ${new Date(body.generated_at).toLocaleString()} · auto-refresh: ${cadenceLabel(nextCadence)}`;
+      } catch (e) {
+        errorEl.textContent = `Network error: ${e.message}`;
+      } finally {
+        refreshBtn.disabled = false;
+        scheduleNextRefresh(nextCadence);
+      }
+    }
+
+    function renderEmpty(message) {
+      contentEl.innerHTML = "";
+      const div = document.createElement("div");
+      div.className = "empty";
+      div.textContent = message;
+      contentEl.appendChild(div);
+    }
+
+    function fmtAge(seconds) {
+      if (!Number.isFinite(seconds)) return "—";
+      const s = Math.max(0, Math.floor(seconds));
+      if (s < 60) return `${s}s ago`;
+      if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+      if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+      return `${Math.floor(s / 86400)}d ago`;
+    }
+
+    function renderEndpointPill(ep) {
+      const pill = document.createElement("span");
+      const tier = ep.tier || "?";
+      const status = ep.status || "Unknown";
+      const cur = ep.current_instances;
+      const des = ep.desired_instances;
+      const inFlight = ep.in_flight ?? 0;
+      const ageStr = fmtAge(ep.age_seconds);
+      const hasCounts = cur != null && des != null;
+      const queuedSuffix = inFlight > 0 ? ` · ${inFlight} queued` : "";
+
+      let state;
+      let label;
+      if (!hasCounts) {
+        // Legacy/error fallback — backend didn't return capacity numbers.
+        const legacyMap = { InService: "warm", Updating: "warming", Creating: "warming", Failed: "failed" };
+        state = legacyMap[status] || "cold";
+        label = `${tier} · ${status} · ${ageStr}${queuedSuffix}`;
+      } else {
+        const cap = `${cur}/${des}`;
+        if (status === "Failed") {
+          state = "failed";
+          label = `${tier} · failed · ${cap}${queuedSuffix}`;
+        } else if (status === "Creating" || status === "Updating") {
+          state = "warming";
+          const verb = status === "Creating" ? "creating" : "updating";
+          label = `${tier} · ${verb} · ${cap} · ${ageStr}${queuedSuffix}`;
+        } else if (cur < des) {
+          state = "warming";
+          label = `${tier} · warming · ${cap} · ${ageStr}${queuedSuffix}`;
+        } else if (cur === 0 && inFlight > 0) {
+          state = "warming";
+          label = `${tier} · warming · ${cap} · ${ageStr}${queuedSuffix}`;
+        } else if (cur >= 1) {
+          state = "warm";
+          label = `${tier} · warm · ${cap}${queuedSuffix}`;
+        } else {
+          state = "cold";
+          label = `${tier} · cold · ${cap}${queuedSuffix}`;
+        }
+      }
+
+      pill.className = `endpoint-pill endpoint-state-${state}`;
+      const strong = document.createElement("strong");
+      strong.textContent = tier;
+      pill.appendChild(strong);
+      if (state === "warming") {
+        const dot = document.createElement("span");
+        dot.className = "pulse";
+        pill.appendChild(dot);
+      }
+      // Strip the leading "<tier> " from label since <strong> already renders it.
+      const rest = label.startsWith(`${tier} `) ? label.slice(tier.length + 1) : label;
+      pill.appendChild(document.createTextNode(rest));
+
+      const titleParts = [];
+      if (ep.endpoint_name) titleParts.push(ep.endpoint_name);
+      titleParts.push(`current=${cur == null ? "?" : cur}, desired=${des == null ? "?" : des}, in_flight=${inFlight}, status=${status}, last_modified=${ep.last_modified || "?"}`);
+      pill.title = titleParts.join(" | ");
+      return pill;
+    }
+
+    function renderBuckets(buckets, endpoints) {
+      contentEl.innerHTML = "";
+      if (buckets.length === 0) {
+        renderEmpty("No telemetry rows yet.");
+        return;
+      }
+      const endpointsByTier = new Map();
+      for (const ep of endpoints || []) {
+        if (ep && ep.tier) endpointsByTier.set(ep.tier, ep);
+      }
+      // Group buckets by model_version, preserving first-seen order.
+      const groups = new Map();
+      for (const b of buckets) {
+        const mv = b.model_version || "unknown";
+        if (!groups.has(mv)) groups.set(mv, []);
+        groups.get(mv).push(b);
+      }
+      const wrap = document.createElement("div");
+      wrap.className = "buckets";
+      for (const [modelVersion, rows] of groups) {
+        wrap.appendChild(renderModelGroup(modelVersion, rows, endpointsByTier));
+      }
+      contentEl.appendChild(wrap);
+    }
+
+    function renderModelGroup(modelVersion, rows, endpointsByTier) {
+      const group = document.createElement("section");
+      group.className = "model-group";
+
+      const head = document.createElement("header");
+      head.className = "model-head";
+
+      const modelEl = document.createElement("span");
+      modelEl.className = "model";
+      const shortHash = modelVersion.length > 8 ? `${modelVersion.slice(0, 8)}…` : modelVersion;
+      modelEl.textContent = `model ${shortHash}`;
+      modelEl.title = modelVersion;
+      head.appendChild(modelEl);
+
+      const tiers = new Set();
+      for (const r of rows) if (r.tier) tiers.add(r.tier);
+      const summary = document.createElement("span");
+      summary.className = "model-summary";
+      summary.textContent = `${rows.length} row${rows.length === 1 ? "" : "s"} across ${tiers.size} tier${tiers.size === 1 ? "" : "s"}`;
+      head.appendChild(summary);
+
+      // Endpoint pills for tiers present in this model's bucket rows (skip unknown).
+      for (const tier of tiers) {
+        const ep = endpointsByTier.get(tier);
+        if (ep) head.appendChild(renderEndpointPill(ep));
+      }
+
+      group.appendChild(head);
+
+      for (const b of rows) group.appendChild(renderBucket(b));
+      return group;
+    }
+
+    function renderBucket(b) {
+      const counts = b.counts || {};
+      const verdictKeys = ["approved", "rejected", "skipped", "pending"];
+      const verdictTotal = verdictKeys.reduce((acc, k) => acc + (counts[k] || 0), 0);
+      const card = document.createElement("div");
+      card.className = "bucket";
+
+      const head = document.createElement("div");
+      head.className = "bucket-head";
+      const modelEl = document.createElement("span");
+      modelEl.className = "model";
+      const fullHash = b.model_version || "unknown";
+      const shortHash = fullHash.length > 8 ? `${fullHash.slice(0, 8)}…` : fullHash;
+      modelEl.textContent = `model ${shortHash}`;
+      modelEl.title = fullHash;
+      const tierEl = document.createElement("span");
+      tierEl.className = "tier";
+      tierEl.textContent = b.tier || "unknown";
+      const totalEl = document.createElement("span");
+      totalEl.className = "total";
+      totalEl.textContent = `${verdictTotal} verdict row${verdictTotal === 1 ? "" : "s"}`;
+      head.append(modelEl, tierEl, totalEl);
+      card.appendChild(head);
+
+      // Segmented bar — verdict-based.
+      const bar = document.createElement("div");
+      bar.className = "bar";
+      const safeTotal = verdictTotal > 0 ? verdictTotal : 1;
+      for (const k of verdictKeys) {
+        const v = counts[k] || 0;
+        if (v === 0) continue;
+        const seg = document.createElement("span");
+        seg.className = `seg-${k}`;
+        seg.style.width = `${(v / safeTotal) * 100}%`;
+        seg.title = `${k}: ${v}`;
+        bar.appendChild(seg);
+      }
+      card.appendChild(bar);
+
+      const legend = document.createElement("div");
+      legend.className = "legend";
+      legend.innerHTML = `
+        <span><span class="swatch" style="background: var(--approved)"></span>approved ${counts.approved || 0}</span>
+        <span><span class="swatch" style="background: var(--rejected)"></span>rejected ${counts.rejected || 0}</span>
+        <span><span class="swatch" style="background: var(--skipped)"></span>skipped ${counts.skipped || 0}</span>
+        <span><span class="swatch" style="background: var(--pending)"></span>pending ${counts.pending || 0}</span>
+      `;
+      card.appendChild(legend);
+
+      // Raw counts — two side-by-side 2-col micro-tables (verdict + inference_status).
+      const countsRow = document.createElement("div");
+      countsRow.className = "counts-row";
+      const verdictTable = document.createElement("table");
+      verdictTable.className = "counts";
+      verdictTable.innerHTML = `
+        <thead>
+          <tr><th>verdict</th><th class="num">count</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>unannotated</td> <td class="num">${counts.unannotated || 0}</td></tr>
+          <tr><td>running</td>     <td class="num">${counts.running     || 0}</td></tr>
+          <tr><td>approved</td>    <td class="num">${counts.approved    || 0}</td></tr>
+          <tr><td>rejected</td>    <td class="num">${counts.rejected    || 0}</td></tr>
+          <tr><td>skipped</td>     <td class="num">${counts.skipped     || 0}</td></tr>
+        </tbody>
+      `;
+      const statusTable = document.createElement("table");
+      statusTable.className = "counts";
+      statusTable.innerHTML = `
+        <thead>
+          <tr><th>inference_status</th><th class="num">count</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>running</td>   <td class="num">${counts.running   || 0}</td></tr>
+          <tr><td>completed</td> <td class="num">${counts.completed || 0}</td></tr>
+          <tr><td>failed</td>    <td class="num">${counts.failed    || 0}</td></tr>
+          <tr><td>skipped</td>   <td class="num">${counts.skipped   || 0}</td></tr>
+          <tr><td>abandoned</td> <td class="num">${counts.abandoned || 0}</td></tr>
+        </tbody>
+      `;
+      countsRow.append(verdictTable, statusTable);
+      card.appendChild(countsRow);
+
+      return card;
+    }
+
+    // Initial fetch only if a key is already saved; otherwise wait for user.
+    if (apiKeyEl.value) {
+      fetchMetrics();
+    } else {
+      scheduleNextRefresh(REFRESH_SLOW_MS);
+    }
+  </script>
+</body>
+</html>

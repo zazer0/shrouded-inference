@@ -1,0 +1,4 @@
+fairchem-core==1.2.0
+e3nn
+ase
+torch_geometric

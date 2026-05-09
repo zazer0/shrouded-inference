@@ -1,0 +1,14 @@
+node_modules/
+cdk.out/
+__pycache__/
+*.pt
+*.pkl
+.venv/
+model_artifacts/
+.env
+.envrc
+.claude/
+infra/cdk.context.json
+worklogs/
+.claude-wt/
+PUBLISH_CLEANUP_PLAN.md

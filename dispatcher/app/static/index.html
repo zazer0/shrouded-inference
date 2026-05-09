@@ -1,0 +1,817 @@
+<!doctype html>
+<!-- webui/improve-aesthetics: scaffolding commit (kickoff cold PR env build) -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GNN Inference PoC</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --border: #d8dde3;
+      --text: #1a1f2c;
+      --muted: #6b7280;
+      --accent: #2c5fd5;
+      --accent-hover: #1f48a8;
+      --error: #b42318;
+      --approved: #15803d;
+      --rejected: #b42318;
+      --skipped: #6b7280;
+      --pending: #b45309;
+      --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+    main { max-width: 880px; margin: 0 auto; }
+    h1 { font-size: 22px; margin: 0 0 16px; }
+    h2 { font-size: 15px; margin: 24px 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .subtitle { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 16px;
+    }
+    .row { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+    .row label { min-width: 90px; color: var(--muted); }
+    input[type="password"], input[type="text"], select, textarea, button {
+      font-family: inherit;
+      font-size: 14px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: white;
+      color: var(--text);
+    }
+    input[type="password"], input[type="text"] { flex: 1; min-width: 240px; }
+    select { min-width: 140px; }
+    textarea {
+      width: 100%;
+      font-family: var(--mono);
+      font-size: 13px;
+      resize: vertical;
+    }
+    button {
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+      cursor: pointer;
+      font-weight: 600;
+      padding: 9px 18px;
+    }
+    button:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .card-actions {
+      display: none;
+      gap: 8px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+    .card-actions.show { display: flex; }
+    .card-actions button {
+      padding: 6px 14px;
+      font-size: 13px;
+    }
+    .card-actions .approve { background: var(--accent); border-color: var(--accent); }
+    .card-actions .approve:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+    .card-actions .regenerate { background: #facc15; border-color: #facc15; color: #111827; }
+    .card-actions .regenerate:hover:not(:disabled) { background: #eab308; border-color: #eab308; color: #111827; }
+    .action-msg { font-size: 12.5px; color: var(--error); margin-top: 6px; min-height: 1em; }
+    .err { color: var(--error); font-family: var(--mono); font-size: 13px; margin-top: 8px; min-height: 1.2em; white-space: pre-wrap; }
+    .results { display: flex; flex-direction: column; gap: 12px; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 14px;
+      border-left: 3px solid var(--border);
+    }
+    .card[data-badge-key="approved"]   { border-left-color: var(--approved); }
+    .card[data-badge-key="completed"]  { border-left-color: var(--approved); }
+    .card[data-badge-key="rejected"]   { border-left-color: var(--rejected); }
+    .card[data-badge-key="failed"]     { border-left-color: var(--rejected); }
+    .card[data-badge-key="error"]      { border-left-color: var(--rejected); }
+    .card[data-badge-key="skipped"]    { border-left-color: var(--skipped); }
+    .card[data-badge-key="awaiting"]   { border-left-color: var(--skipped); }
+    .card[data-badge-key="pending"]    { border-left-color: var(--pending); }
+    .card-head {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .card-head .id { font-family: var(--mono); color: var(--text); font-weight: 600; }
+    .card-head .tier {
+      background: #eef2ff;
+      color: #3730a3;
+      padding: 1px 8px;
+      border-radius: 10px;
+      font-size: 12px;
+    }
+    .card-head .hash {
+      background: #f1f5f9;
+      color: #475569;
+      padding: 1px 8px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-family: var(--mono);
+    }
+    .card-head .ts { margin-left: auto; }
+    .badge {
+      font-weight: 600;
+      padding: 1px 8px;
+      border-radius: 10px;
+      font-size: 12px;
+      background: color-mix(in srgb, var(--muted) 12%, transparent);
+    }
+    .card[data-badge-key="approved"]  .badge,
+    .card[data-badge-key="completed"] .badge { background: color-mix(in srgb, var(--approved) 12%, transparent); }
+    .card[data-badge-key="rejected"]  .badge,
+    .card[data-badge-key="failed"]    .badge,
+    .card[data-badge-key="error"]     .badge { background: color-mix(in srgb, var(--rejected) 12%, transparent); }
+    .card[data-badge-key="skipped"]   .badge,
+    .card[data-badge-key="awaiting"]  .badge { background: color-mix(in srgb, var(--skipped) 12%, transparent); }
+    .card[data-badge-key="pending"]   .badge { background: color-mix(in srgb, var(--pending) 12%, transparent); }
+    .card pre {
+      font-family: var(--mono);
+      font-size: 12.5px;
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 12px;
+      border-radius: 4px;
+      overflow-x: auto;
+      margin: 10px 0 0;
+      max-height: 360px;
+    }
+    .card .detail { font-family: var(--mono); font-size: 12.5px; color: var(--error); margin-top: 8px; white-space: pre-wrap; }
+    .card .skipped-note { color: var(--muted); font-size: 13px; margin-top: 8px; font-style: italic; }
+    .card .toggle-output {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      padding: 3px 10px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .card .toggle-output:hover { background: #f1f5f9; color: var(--text); }
+    .card[data-expanded="false"] [data-body] pre { display: none; }
+    .empty { color: var(--muted); font-style: italic; }
+    .header-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin: 0 0 16px;
+    }
+    .header-row h1 { margin: 0; }
+    .header-row a { color: var(--accent); text-decoration: none; font-size: 13px; }
+    .header-row a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="header-row">
+      <h1>GNN Inference PoC</h1>
+      <a href="/admin.html">Admin &rarr;</a>
+    </div>
+    <p class="subtitle">Verdict-only feedback. The payload is hashed before storage; raw input never leaves this request.</p>
+
+    <div class="panel">
+      <div class="row">
+        <label for="apiKey">API key</label>
+        <input id="apiKey" type="password" autocomplete="off" placeholder="paste API key">
+      </div>
+      <div class="row">
+        <label for="tier">Tier</label>
+        <select id="tier">
+          <option value="small">small (CPU &middot; GraphSAGE)</option>
+          <option value="large">large (GPU &middot; EquiformerV2)</option>
+        </select>
+      </div>
+      <div>
+        <label for="payload" style="color: var(--muted); display: block; margin-bottom: 6px;">Payload (JSON)</label>
+        <textarea id="payload" rows="12" spellcheck="false"></textarea>
+      </div>
+      <div class="err" id="inputError"></div>
+      <div class="row" style="margin-top: 12px; margin-bottom: 0;">
+        <button id="runBtn" type="button">Run inference</button>
+      </div>
+    </div>
+
+    <h2>Results</h2>
+    <div class="results" id="results">
+      <div class="empty" id="emptyHint">No runs yet.</div>
+    </div>
+  </main>
+
+  <script>
+    const SAMPLES = {
+      small: { node_indices: [0, 1, 2, 3] },
+      large: {
+        positions: [[1.28, 0.74, 7.50], [1.28, 0.74, 8.66], [0, 0, 0], [1.28, 0.74, 2.08]],
+        numbers: [29, 29, 6, 8],
+        cell: [[2.56, 0, 0], [1.28, 2.22, 0], [0, 0, 15.0]],
+        pbc: [true, true, true],
+      },
+    };
+    const SAMPLE_TEXT = {
+      small: JSON.stringify(SAMPLES.small, null, 2),
+      large: JSON.stringify(SAMPLES.large, null, 2),
+    };
+    const TIER_LABELS = {
+      small: "small (CPU · GraphSAGE)",
+      large: "large (GPU · EquiformerV2)",
+    };
+    // Each entry corresponds to one fused (status, verdict) combination shown
+    // as a single badge. `setBadge(card, status, verdict)` resolves to one of
+    // these labels via `pickBadge(...)`.
+    const STATUS_META = {
+      pending:    { icon: "\u{1F7E1}", color: "#b45309", label: "pending" },
+      completed:  { icon: "\u{1F7E2}", color: "#15803d", label: "completed" },
+      awaiting:   { icon: "\u{26AA}",  color: "#6b7280", label: "awaiting verdict" },
+      approved:   { icon: "\u{1F7E2}", color: "#15803d", label: "approved" },
+      rejected:   { icon: "\u{1F534}", color: "#b42318", label: "rejected" },
+      failed:     { icon: "\u{1F534}", color: "#b42318", label: "failed" },
+      error:      { icon: "\u{1F534}", color: "#b42318", label: "error" },
+      skipped:    { icon: "\u{23ED}",  color: "#6b7280", label: "Double submission — skipped" },
+    };
+    const POLL_MS = 2000;
+    const SOFT_POLL_MS = 5000;
+    const MAX_STORED_CARDS = 50;
+    const STORAGE_KEY = "gnn_api_key";
+    const CARDS_KEY = "gnn_cards";
+    const EXPANDED_KEY = "gnn_cards_expanded";
+
+    const apiKeyEl = document.getElementById("apiKey");
+    const tierEl = document.getElementById("tier");
+    const payloadEl = document.getElementById("payload");
+    const inputErrEl = document.getElementById("inputError");
+    const runBtn = document.getElementById("runBtn");
+    const resultsEl = document.getElementById("results");
+    const emptyHintEl = document.getElementById("emptyHint");
+
+    let lastTier = tierEl.value;
+    apiKeyEl.value = localStorage.getItem(STORAGE_KEY) || "";
+    payloadEl.value = SAMPLE_TEXT[lastTier];
+
+    const persistKey = () => localStorage.setItem(STORAGE_KEY, apiKeyEl.value);
+    apiKeyEl.addEventListener("blur", persistKey);
+    apiKeyEl.addEventListener("change", persistKey);
+
+    tierEl.addEventListener("change", () => {
+      const newTier = tierEl.value;
+      const current = payloadEl.value.trim();
+      if (current === "" || current === SAMPLE_TEXT[lastTier].trim()) {
+        payloadEl.value = SAMPLE_TEXT[newTier];
+      }
+      lastTier = newTier;
+    });
+
+    runBtn.addEventListener("click", onRun);
+
+    // ---------- Card persistence ----------
+    function loadStoredCards() {
+      try {
+        const raw = localStorage.getItem(CARDS_KEY);
+        return raw ? JSON.parse(raw) : [];
+      } catch { return []; }
+    }
+    function saveStoredCards(cards) {
+      // Newest stays at index 0; FIFO trim from the tail keeps the freshest 50.
+      const trimmed = cards.slice(0, MAX_STORED_CARDS);
+      localStorage.setItem(CARDS_KEY, JSON.stringify(trimmed));
+    }
+    function rememberCard(meta) {
+      const cards = loadStoredCards().filter((c) => c.inference_id !== meta.inference_id);
+      cards.unshift(meta);
+      saveStoredCards(cards);
+    }
+
+    // Per-card output-toggle expansion state. Stored as `{ inferenceId: true }`
+    // so the default (absent key) is collapsed.
+    function loadExpanded() {
+      try {
+        const raw = localStorage.getItem(EXPANDED_KEY);
+        return raw ? JSON.parse(raw) : {};
+      } catch { return {}; }
+    }
+    function setExpandedFor(inferenceId, expanded) {
+      const map = loadExpanded();
+      if (expanded) map[inferenceId] = true;
+      else delete map[inferenceId];
+      try { localStorage.setItem(EXPANDED_KEY, JSON.stringify(map)); } catch { /* quota */ }
+    }
+
+    // ---------- Submit & regenerate ----------
+    async function submitPredict(tier, payload) {
+      const key = apiKeyEl.value.trim();
+      if (!key) {
+        inputErrEl.textContent = "API key is required.";
+        return null;
+      }
+      const resp = await fetch("/v1/predict", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Api-Key": key },
+        body: JSON.stringify({ tier, payload }),
+      });
+      const text = await resp.text();
+      let body;
+      try { body = text ? JSON.parse(text) : {}; } catch { body = { detail: text }; }
+      if (!resp.ok) {
+        const detail = body.detail || `HTTP ${resp.status}`;
+        inputErrEl.textContent = `Submit failed: ${typeof detail === "string" ? detail : JSON.stringify(detail)}`;
+        return null;
+      }
+      if (!body.inference_id) {
+        inputErrEl.textContent = "Server response missing inference_id.";
+        return null;
+      }
+      return body; // { inference_id, output_location, skipped }
+    }
+
+    async function onRun() {
+      inputErrEl.textContent = "";
+      let parsed;
+      try {
+        parsed = JSON.parse(payloadEl.value);
+      } catch (e) {
+        inputErrEl.textContent = `Invalid JSON: ${e.message}`;
+        return;
+      }
+      const tier = tierEl.value;
+      runBtn.disabled = true;
+      try {
+        const submitResp = await submitPredict(tier, parsed);
+        if (!submitResp) return;
+        const { inference_id: inferenceId, skipped, input_sha256: inputSha256 } = submitResp;
+        const meta = {
+          inference_id: inferenceId,
+          tier,
+          payload: parsed,
+          created_at: new Date().toISOString(),
+          skipped: !!skipped,
+          input_sha256: inputSha256 || null,
+        };
+        rememberCard(meta);
+        const card = renderCard(meta);
+        if (skipped) {
+          // Terminal state from the server. No SageMaker invoke happened, so
+          // there's nothing to poll — just paint the badge and explanatory body.
+          setBadge(card, "skipped", "skipped");
+          renderSkipped(card);
+          return;
+        }
+        pollUntilDone(inferenceId, card);
+      } catch (e) {
+        inputErrEl.textContent = `Network error: ${e.message}`;
+      } finally {
+        runBtn.disabled = false;
+      }
+    }
+
+    // ---------- Card DOM ----------
+    function renderCard(meta) {
+      if (emptyHintEl && emptyHintEl.parentNode) emptyHintEl.remove();
+      const card = document.createElement("div");
+      card.className = "card";
+      card.dataset.inferenceId = meta.inference_id;
+      card.dataset.tier = meta.tier;
+      // Stash the payload on the DOM node so Regenerate can re-submit without
+      // another localStorage roundtrip.
+      card._payload = meta.payload;
+      const shortId = meta.inference_id.slice(0, 8);
+      const ts = new Date(meta.created_at).toLocaleTimeString();
+      card.dataset.expanded = "false";
+      card.dataset.badgeKey = "pending";
+      const hash = typeof meta.input_sha256 === "string" ? meta.input_sha256 : "";
+      const hashHtml = hash
+        ? `<span class="hash" data-hash title="${hash}">input-hash ${hash.slice(0, 8)}…</span>`
+        : `<span class="hash" data-hash style="display:none"></span>`;
+      card.innerHTML = `
+        <div class="card-head">
+          <span class="id" title="${meta.inference_id}">${shortId}</span>
+          <span class="tier">${TIER_LABELS[meta.tier] || meta.tier}</span>
+          ${hashHtml}
+          <span class="badge" data-badge>${STATUS_META.pending.icon} pending</span>
+          <button type="button" class="toggle-output" data-toggle-output style="display:none">Show output</button>
+          <span class="ts">${ts}</span>
+        </div>
+        <div data-body></div>
+        <div class="card-actions" data-actions>
+          <button type="button" class="approve" data-approve>Approve</button>
+          <button type="button" class="regenerate" data-regenerate>Regenerate</button>
+        </div>
+        <div class="action-msg" data-action-msg></div>
+      `;
+      resultsEl.prepend(card);
+      card.querySelector("[data-approve]").addEventListener("click", () => onApprove(card));
+      card.querySelector("[data-regenerate]").addEventListener("click", () => onRegenerate(card));
+      card.querySelector("[data-toggle-output]").addEventListener("click", () => onToggleOutput(card));
+      return card;
+    }
+
+    function onToggleOutput(card) {
+      const expanded = card.dataset.expanded !== "true";
+      card.dataset.expanded = expanded ? "true" : "false";
+      const btn = card.querySelector("[data-toggle-output]");
+      if (btn) btn.textContent = expanded ? "Hide output" : "Show output";
+      setExpandedFor(card.dataset.inferenceId, expanded);
+    }
+
+    function showToggleButton(card, show) {
+      const btn = card.querySelector("[data-toggle-output]");
+      if (!btn) return;
+      btn.style.display = show ? "" : "none";
+    }
+
+    function pickBadgeKey(status, verdict) {
+      // Skipped is a terminal "double-submission" state; the verdict carries
+      // the meaning regardless of whatever status got reported.
+      if (verdict === "skipped" || status === "skipped") return "skipped";
+      if (status === "failed" || status === "error") return status;
+      if (status === "completed") {
+        if (verdict === "approved") return "approved";
+        if (verdict === "rejected") return "rejected";
+        // verdict pending OR null (legacy row) — both are "no decision yet".
+        return "awaiting";
+      }
+      return "pending";
+    }
+
+    function setBadge(card, status, verdict) {
+      const key = pickBadgeKey(status, verdict);
+      const meta = STATUS_META[key] || { icon: "\u{2753}", color: "var(--muted)", label: key };
+      const badge = card.querySelector("[data-badge]");
+      badge.textContent = `${meta.icon} ${meta.label}`;
+      badge.style.color = meta.color;
+      updateActions(card, status, verdict);
+      card.dataset.status = status || "";
+      card.dataset.verdict = verdict || "";
+      card.dataset.badgeKey = key;
+    }
+
+    function updateActions(card, status, verdict) {
+      const actions = card.querySelector("[data-actions]");
+      if (!actions) return;
+      // Skipped rows are terminal — no further action available, so hide
+      // both buttons explicitly (don't even show the row).
+      if (verdict === "skipped" || status === "skipped") {
+        actions.classList.remove("show");
+        return;
+      }
+      // Actions only make sense once inference is done AND verdict is pending.
+      // Once a verdict lands (approved/rejected/etc.) the row is removed entirely
+      // — greying out is noisy on terminal cards.
+      const showActions = status === "completed" && verdict === "pending";
+      actions.classList.toggle("show", showActions);
+      card.querySelector("[data-approve]").disabled = !showActions;
+      card.querySelector("[data-regenerate]").disabled = !showActions;
+    }
+
+    function renderCompleted(card, result, opts) {
+      const body = card.querySelector("[data-body]");
+      const pre = document.createElement("pre");
+      pre.textContent = JSON.stringify(result, null, 2);
+      body.replaceChildren(pre);
+      // Toggle becomes available once there's output to show. Restore the
+      // user's previously-chosen expansion state (default collapsed) — but
+      // auto-expand the topmost card on first render if the user has no
+      // recorded preference for it yet. `opts.suppressAutoExpand` lets the
+      // rehydration loop skip this default until it can apply it once at the
+      // end (otherwise every prepended card looks topmost mid-loop).
+      const id = card.dataset.inferenceId;
+      const expandedMap = loadExpanded();
+      let expanded = !!expandedMap[id];
+      const suppress = !!(opts && opts.suppressAutoExpand);
+      if (
+        !suppress &&
+        expandedMap[id] === undefined &&
+        card === resultsEl.firstElementChild
+      ) {
+        expanded = true;
+        setExpandedFor(id, true);
+      }
+      card.dataset.expanded = expanded ? "true" : "false";
+      const btn = card.querySelector("[data-toggle-output]");
+      if (btn) {
+        btn.style.display = "";
+        btn.textContent = expanded ? "Hide output" : "Show output";
+      }
+    }
+
+    function renderSkipped(card) {
+      const body = card.querySelector("[data-body]");
+      const div = document.createElement("div");
+      div.className = "skipped-note";
+      div.textContent = "This submission matched an in-flight request; results will appear on the original card.";
+      body.replaceChildren(div);
+      showToggleButton(card, false);
+    }
+
+    function renderFailed(card, message) {
+      const body = card.querySelector("[data-body]");
+      const div = document.createElement("div");
+      div.className = "detail";
+      div.textContent = message || "(no detail provided)";
+      body.replaceChildren(div);
+    }
+
+    function setActionMsg(card, msg, kind) {
+      const el = card.querySelector("[data-action-msg]");
+      el.textContent = msg || "";
+      el.style.color = kind === "ok" ? "#15803d" : "var(--error)";
+    }
+
+    // ---------- Polling ----------
+    async function pollUntilDone(inferenceId, card) {
+      while (true) {
+        await sleep(POLL_MS);
+        let resp;
+        try {
+          resp = await fetch(`/v1/predict/${encodeURIComponent(inferenceId)}`);
+        } catch (e) {
+          setBadge(card, "failed", null);
+          renderFailed(card, `Network error while polling: ${e.message}`);
+          return;
+        }
+        if (!resp.ok) {
+          setBadge(card, "failed", null);
+          let detail = `HTTP ${resp.status}`;
+          try {
+            const body = await resp.json();
+            if (body && body.detail) detail += ` — ${typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail)}`;
+          } catch { /* non-JSON body */ }
+          renderFailed(card, `Poll failed: ${detail}`);
+          return;
+        }
+        let body;
+        try { body = await resp.json(); }
+        catch (e) {
+          setBadge(card, "failed", null);
+          renderFailed(card, `Invalid JSON in poll response: ${e.message}`);
+          return;
+        }
+        const { status, verdict } = body;
+        setBadge(card, status, verdict);
+        if (status === "completed") {
+          renderCompleted(card, body.result);
+          if (verdict === "pending") softPollVerdict(inferenceId, card);
+          return;
+        }
+        if (status === "failed" || status === "error") {
+          renderFailed(card, body.error || "(no error detail)");
+          return;
+        }
+      }
+    }
+
+    // Once the inference is `completed` and the verdict is still `pending`,
+    // poll the GET status route every SOFT_POLL_MS so other-tab regenerations
+    // (which mark the row rejected via DDB) surface here without a refresh.
+    async function softPollVerdict(inferenceId, card) {
+      while (card.dataset.status === "completed" && card.dataset.verdict === "pending") {
+        await sleep(SOFT_POLL_MS);
+        if (!card.isConnected) return;
+        let body;
+        try {
+          const resp = await fetch(`/v1/predict/${encodeURIComponent(inferenceId)}`);
+          if (!resp.ok) return;
+          body = await resp.json();
+        } catch { return; }
+        setBadge(card, body.status, body.verdict);
+        if (body.verdict !== "pending") return;
+      }
+    }
+
+    // ---------- Approve / Regenerate ----------
+    async function onApprove(card) {
+      const id = card.dataset.inferenceId;
+      const key = apiKeyEl.value.trim();
+      if (!key) {
+        setActionMsg(card, "API key is required.");
+        return;
+      }
+      setActionMsg(card, "");
+      const approveBtn = card.querySelector("[data-approve]");
+      const regenBtn = card.querySelector("[data-regenerate]");
+      approveBtn.disabled = true;
+      regenBtn.disabled = true;
+      try {
+        const resp = await fetch(`/v1/predict/${encodeURIComponent(id)}/approve`, {
+          method: "POST",
+          headers: { "X-Api-Key": key },
+        });
+        let body = {};
+        try { body = await resp.json(); } catch { /* ignore */ }
+        if (resp.status === 200) {
+          setBadge(card, "completed", "approved");
+          setActionMsg(card, "Approved.", "ok");
+          return;
+        }
+        if (resp.status === 409) {
+          // Someone else already moved this past pending. Resync via status.
+          setBadge(card, "completed", body.verdict || "rejected");
+          setActionMsg(card, `Conflict — verdict is now ${body.verdict || "unknown"}.`);
+          return;
+        }
+        if (resp.status === 403) {
+          setActionMsg(card, "Forbidden — this inference belongs to a different API key.");
+          updateActions(card, card.dataset.status, card.dataset.verdict);
+          return;
+        }
+        setActionMsg(card, `Approve failed: HTTP ${resp.status} ${body.detail || ""}`.trim());
+        updateActions(card, card.dataset.status, card.dataset.verdict);
+      } catch (e) {
+        setActionMsg(card, `Network error: ${e.message}`);
+        updateActions(card, card.dataset.status, card.dataset.verdict);
+      }
+    }
+
+    async function onRegenerate(card) {
+      const tier = card.dataset.tier;
+      const payload = card._payload;
+      if (!payload) {
+        setActionMsg(card, "Cannot regenerate — original payload missing.");
+        return;
+      }
+      const approveBtn = card.querySelector("[data-approve]");
+      const regenBtn = card.querySelector("[data-regenerate]");
+      approveBtn.disabled = true;
+      regenBtn.disabled = true;
+      setActionMsg(card, "Regenerating…", "ok");
+      try {
+        const submitResp = await submitPredict(tier, payload);
+        if (!submitResp) {
+          setActionMsg(card, inputErrEl.textContent || "Regenerate failed.");
+          updateActions(card, card.dataset.status, card.dataset.verdict);
+          return;
+        }
+        const { inference_id: inferenceId, skipped, input_sha256: inputSha256 } = submitResp;
+        const meta = {
+          inference_id: inferenceId,
+          tier,
+          payload,
+          created_at: new Date().toISOString(),
+          skipped: !!skipped,
+          input_sha256: inputSha256 || null,
+        };
+        rememberCard(meta);
+        const newCard = renderCard(meta);
+        if (skipped) {
+          setBadge(newCard, "skipped", "skipped");
+          renderSkipped(newCard);
+        } else {
+          pollUntilDone(inferenceId, newCard);
+        }
+        // Server-side hash logic already rejected this card's row; soft-poll
+        // (or pollUntilDone) will pick up the flipped verdict shortly.
+        setActionMsg(card, "Regenerated — see new card above.", "ok");
+      } catch (e) {
+        setActionMsg(card, `Network error: ${e.message}`);
+        updateActions(card, card.dataset.status, card.dataset.verdict);
+      }
+    }
+
+    // ---------- Fixtures (first-visit demo cards) ----------
+    const FIXTURES_SEEDED_KEY = "gnn_fixtures_seeded";
+    function makeFakeHash(seed) {
+      // Deterministic 64-char hex string built from a short seed. Keeps the
+      // chip's hover-to-reveal feel realistic without pretending it's real.
+      const hex = "0123456789abcdef";
+      let out = "";
+      let s = 0;
+      for (let i = 0; i < seed.length; i++) s = (s * 31 + seed.charCodeAt(i)) >>> 0;
+      for (let i = 0; i < 64; i++) {
+        s = (s * 1103515245 + 12345) >>> 0;
+        out += hex[s & 0xf];
+      }
+      return out;
+    }
+    function buildFixtures() {
+      const now = Date.now();
+      // Newest-first ordering. unshift logic in rememberCard puts the first
+      // call at the front; we want the "approved" fixture topmost, then
+      // "rejected", then "pending" — reverse the array when seeding so order
+      // matches "newest first" in storage.
+      return [
+        {
+          _fixture: true,
+          inference_id: "fixture-approved-001",
+          tier: "small",
+          payload: { node_indices: [0, 1, 2, 3] },
+          created_at: new Date(now - 60_000).toISOString(),
+          skipped: false,
+          input_sha256: makeFakeHash("fixture-approved-001"),
+          status: "completed",
+          verdict: "approved",
+          result: { predictions: [3, 4, 4, 0] },
+        },
+        {
+          _fixture: true,
+          inference_id: "fixture-rejected-002",
+          tier: "large",
+          payload: { node_indices: [4, 5, 6, 7] },
+          created_at: new Date(now - 120_000).toISOString(),
+          skipped: false,
+          input_sha256: makeFakeHash("fixture-rejected-002"),
+          status: "completed",
+          verdict: "rejected",
+          result: { predictions: [1, 0, 2, 1] },
+        },
+        {
+          _fixture: true,
+          inference_id: "fixture-pending-003",
+          tier: "small",
+          payload: { node_indices: [8, 9, 10, 11] },
+          created_at: new Date(now - 180_000).toISOString(),
+          skipped: false,
+          input_sha256: makeFakeHash("fixture-pending-003"),
+          status: "completed",
+          verdict: "pending",
+          result: { predictions: [2, 2, 1, 3] },
+        },
+      ];
+    }
+    function maybeSeedFixtures() {
+      if (loadStoredCards().length !== 0) return;
+      if (localStorage.getItem(FIXTURES_SEEDED_KEY) !== null) return;
+      const fixtures = buildFixtures();
+      // saveStoredCards expects newest-first; buildFixtures already returns
+      // that order.
+      saveStoredCards(fixtures);
+      try { localStorage.setItem(FIXTURES_SEEDED_KEY, "1"); } catch { /* quota */ }
+    }
+
+    // ---------- Rehydration on page load ----------
+    async function rehydrateCards() {
+      maybeSeedFixtures();
+      const stored = loadStoredCards();
+      if (stored.length === 0) return;
+      // Stored array is newest-first; we render oldest-first via prepend so
+      // the visible order ends up newest-on-top.
+      const rehydrateOpts = { suppressAutoExpand: true };
+      for (const meta of [...stored].reverse()) {
+        const card = renderCard(meta);
+        if (meta._fixture) {
+          // Demo cards never hit the backend — paint straight from stored data.
+          setBadge(card, meta.status || "completed", meta.verdict || "pending");
+          if (meta.result !== undefined) renderCompleted(card, meta.result, rehydrateOpts);
+          continue;
+        }
+        try {
+          const resp = await fetch(`/v1/predict/${encodeURIComponent(meta.inference_id)}`);
+          if (!resp.ok) {
+            setBadge(card, "error", null);
+            renderFailed(card, `Could not fetch status (HTTP ${resp.status}).`);
+            continue;
+          }
+          const body = await resp.json();
+          setBadge(card, body.status, body.verdict);
+          if (body.status === "skipped" || body.verdict === "skipped") {
+            renderSkipped(card);
+          } else if (body.status === "pending") {
+            pollUntilDone(meta.inference_id, card);
+          } else if (body.status === "completed") {
+            renderCompleted(card, body.result, rehydrateOpts);
+            if (body.verdict === "pending") softPollVerdict(meta.inference_id, card);
+          } else if (body.status === "failed" || body.status === "error") {
+            renderFailed(card, body.error || "(no error detail)");
+          }
+        } catch (e) {
+          setBadge(card, "error", null);
+          renderFailed(card, `Could not fetch status: ${e.message}`);
+        }
+      }
+      // After rehydration: auto-expand the topmost card if it shows JSON output
+      // and the user has no recorded preference for it yet.
+      const topCard = resultsEl.firstElementChild;
+      if (topCard && topCard.classList && topCard.classList.contains("card")) {
+        const topId = topCard.dataset.inferenceId;
+        const hasOutput = !!topCard.querySelector("[data-body] pre");
+        const expandedMap = loadExpanded();
+        if (hasOutput && expandedMap[topId] === undefined) {
+          topCard.dataset.expanded = "true";
+          const btn = topCard.querySelector("[data-toggle-output]");
+          if (btn) btn.textContent = "Hide output";
+          setExpandedFor(topId, true);
+        }
+      }
+    }
+
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+    rehydrateCards();
+  </script>
+</body>
+</html>
