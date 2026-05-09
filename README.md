@@ -40,23 +40,21 @@ In scope:
 
 ## First-time setup / repo rename recovery
 
-The GitHub Actions OIDC deploy role (`gnn-serving-github-actions-deploy`) trust policy is
+The GitHub Actions OIDC deploy role (`<project_name>-github-actions-deploy`) trust policy is
 sourced dynamically from `GITHUB_REPOSITORY` at CDK synth time. CI keeps it in sync via
 `cdk deploy --all` on every push to `main`. However, CI cannot self-heal for:
 
 1. **First-time setup** — the OIDC role doesn't exist yet.
 2. **After a GitHub repo rename** — the existing trust policy is stale before the next CI run can fix it.
 
-Recovery (one-shot local CLI, with `gnn-deployer` or admin AWS creds):
+Recovery (one-shot local CLI, with deployer AWS creds already sourced):
 
 ```sh
-eval "$(direnv export bash)"   # source .envrc
-cd infra
-npx cdk deploy GithubOidcStack \
-  --context githubRepo=$(gh repo view --json nameWithOwner -q .nameWithOwner) \
-  --require-approval never
+sh scripts/bootstrap_new_deploy_ci.sh <github_owner/repo> <project_name>
 ```
 
-Subsequent pushes to `main` keep the trust policy aligned automatically.
+`project_name` must match the value in `infra/cdk.json` → `context.projectName`. The script
+deploys the OIDC stack, reads the new role ARN, and sets the `AWS_DEPLOY_ROLE_ARN` GitHub secret
+in one step. Subsequent pushes to `main` keep the trust policy aligned automatically.
 
 ---

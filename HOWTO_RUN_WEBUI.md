@@ -18,23 +18,26 @@ Just open that URL in a browser — the static index.html is mounted at `/` by F
 
 ## Getting API keys
 
-Keys live in AWS Secrets Manager under gnn-serving/raw-api-keys. With direnv loaded:
+> **Note:** The secret name is controlled by `context.projectName` in `infra/cdk.json`
+> (e.g., `shrouded-inference/raw-api-keys`).
+
+Keys live in AWS Secrets Manager under `<project_name>/raw-api-keys`. With direnv loaded:
 
 eval "$(direnv export bash)"
 
 ```bash
 # small tier (GraphSAGE)
 aws secretsmanager get-secret-value \
-    --secret-id gnn-serving/raw-api-keys --region us-west-2 \
+    --secret-id <project_name>/raw-api-keys --region us-west-2 \
     --query SecretString --output text | jq -r .small
 
 # large tier (EquiformerV2)
 aws secretsmanager get-secret-value \
-    --secret-id gnn-serving/raw-api-keys --region us-west-2 \
+    --secret-id <project_name>/raw-api-keys --region us-west-2 \
     --query SecretString --output text | jq -r .large
 ```
 
-The secret is a JSON blob with .small and .large fields containing the raw keys. The dispatcher checks the hashed version against gnn-serving/api-keys (hash→tier mapping).
+The secret is a JSON blob with .small and .large fields containing the raw keys. The dispatcher checks the hashed version against `<project_name>/api-keys` (hash→tier mapping).
 
 ## Using the UI
 
