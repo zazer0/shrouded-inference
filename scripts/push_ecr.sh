@@ -16,6 +16,8 @@ ECR_REGISTRY="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
 # 763104351884 is AWS's public Deep Learning Container registry — not our account
 DLC_REGISTRY="763104351884.dkr.ecr.${REGION}.amazonaws.com"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+PROJECT_NAME="$(awk -F'"' '/"projectName"/ { print $4; exit }' "${REPO_ROOT}/infra/cdk.json")"
+: "${PROJECT_NAME:?projectName not found in infra/cdk.json}"
 
 # Authenticate with our ECR
 aws ecr get-login-password --region "${REGION}" | docker login --username AWS --password-stdin "${ECR_REGISTRY}"
@@ -37,8 +39,8 @@ build_and_push() {
 }
 
 # Day 1 builds
-build_and_push "${REPO_ROOT}/models/graphsage" "graphsage-inference${SUFFIX}" "$(git -C "${REPO_ROOT}" rev-parse --short HEAD)"
-build_and_push "${REPO_ROOT}/dispatcher" "dispatcher${SUFFIX}" "$(git -C "${REPO_ROOT}" rev-parse --short HEAD)"
+build_and_push "${REPO_ROOT}/models/graphsage" "${PROJECT_NAME}-graphsage-inference${SUFFIX}" "$(git -C "${REPO_ROOT}" rev-parse --short HEAD)"
+build_and_push "${REPO_ROOT}/dispatcher" "${PROJECT_NAME}-dispatcher${SUFFIX}" "$(git -C "${REPO_ROOT}" rev-parse --short HEAD)"
 
 # Day 2 builds
-build_and_push "${REPO_ROOT}/models/equiformer" "equiformer-inference${SUFFIX}" "$(git -C "${REPO_ROOT}" rev-parse --short HEAD)"
+build_and_push "${REPO_ROOT}/models/equiformer" "${PROJECT_NAME}-equiformer-inference${SUFFIX}" "$(git -C "${REPO_ROOT}" rev-parse --short HEAD)"

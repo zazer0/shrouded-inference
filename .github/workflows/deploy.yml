@@ -22,6 +22,8 @@ jobs:
     outputs:
       ENV_NAME: ${{ steps.env.outputs.ENV_NAME }}
       SUFFIX: ${{ steps.env.outputs.SUFFIX }}
+      PROJECT_NAME: ${{ steps.project.outputs.PROJECT_NAME }}
+      PASCAL_PROJECT: ${{ steps.project.outputs.PASCAL_PROJECT }}
     steps:
       - uses: actions/checkout@v4
 
@@ -35,6 +37,14 @@ jobs:
             echo "ENV_NAME=prod" >> "$GITHUB_OUTPUT"
             echo "SUFFIX=" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Resolve project name
+        id: project
+        run: |
+          PROJECT_NAME="$(jq -r '.context.projectName // "shrouded-inference"' infra/cdk.json)"
+          echo "PROJECT_NAME=${PROJECT_NAME}" >> "$GITHUB_OUTPUT"
+          PASCAL_PROJECT="$(printf '%s' "$PROJECT_NAME" | awk -F- '{for(i=1;i<=NF;i++)$i=toupper(substr($i,1,1)) substr($i,2)}1' OFS='')"
+          echo "PASCAL_PROJECT=${PASCAL_PROJECT}" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-node@v4
         with:
@@ -52,15 +62,12 @@ jobs:
         run: |
           cat <<'EOF' >&2
           OIDC role assume failed. The trust policy on
-            gnn-serving-github-actions-deploy
+            the IAM role for this project's GitHub Actions deploy
           likely no longer matches this repository's owner/name (e.g. after a
           repo rename or first-time setup in a fork).
 
           Recovery (one-shot, local): with gnn-deployer AWS creds,
-            cd infra
-            npx cdk deploy GithubOidcStack \
-              --context githubRepo=$(gh repo view --json nameWithOwner -q .nameWithOwner) \
-              --require-approval never
+            sh scripts/bootstrap_new_deploy_ci.sh $(gh repo view --json nameWithOwner -q .nameWithOwner) <project_name>
 
           See README "First-time setup / repo rename recovery" for details.
           EOF
@@ -79,8 +86,8 @@ jobs:
       - name: Seed equiformer artifact in per-env bucket
         if: steps.env.outputs.ENV_NAME != 'prod'
         run: |
-          SRC="s3://secure-gnn-model-artifacts-${{ steps.aws_auth.outputs.aws-account-id }}/equiformer/model-v2.tar.gz"
-          DST="s3://secure-gnn-model-artifacts-${{ steps.aws_auth.outputs.aws-account-id }}${{ steps.env.outputs.SUFFIX }}/equiformer/model-v2.tar.gz"
+          SRC="s3://${{ steps.project.outputs.PROJECT_NAME }}-model-artifacts-${{ steps.aws_auth.outputs.aws-account-id }}/equiformer/model-v2.tar.gz"
+          DST="s3://${{ steps.project.outputs.PROJECT_NAME }}-model-artifacts-${{ steps.aws_auth.outputs.aws-account-id }}${{ steps.env.outputs.SUFFIX }}/equiformer/model-v2.tar.gz"
           aws s3 cp "$SRC" "$DST"
 
   build:
@@ -111,15 +118,12 @@ jobs:
         run: |
           cat <<'EOF' >&2
           OIDC role assume failed. The trust policy on
-            gnn-serving-github-actions-deploy
+            the IAM role for this project's GitHub Actions deploy
           likely no longer matches this repository's owner/name (e.g. after a
           repo rename or first-time setup in a fork).
 
           Recovery (one-shot, local): with gnn-deployer AWS creds,
-            cd infra
-            npx cdk deploy GithubOidcStack \
-              --context githubRepo=$(gh repo view --json nameWithOwner -q .nameWithOwner) \
-              --require-approval never
+            sh scripts/bootstrap_new_deploy_ci.sh $(gh repo view --json nameWithOwner -q .nameWithOwner) <project_name>
 
           See README "First-time setup / repo rename recovery" for details.
           EOF
@@ -147,15 +151,15 @@ jobs:
           case "${{ matrix.image }}" in
             dispatcher)
               ctx="dispatcher"
-              repo="dispatcher"
+              repo="${{ needs.prep.outputs.PROJECT_NAME }}-dispatcher"
               ;;
             graphsage)
               ctx="models/graphsage"
-              repo="graphsage-inference"
+              repo="${{ needs.prep.outputs.PROJECT_NAME }}-graphsage-inference"
               ;;
             equiformer)
               ctx="models/equiformer"
-              repo="equiformer-inference"
+              repo="${{ needs.prep.outputs.PROJECT_NAME }}-equiformer-inference"
               ;;
             *)
               echo "FAIL: unknown matrix image ${{ matrix.image }}"; exit 1;;
@@ -261,15 +265,12 @@ jobs:
         run: |
           cat <<'EOF' >&2
           OIDC role assume failed. The trust policy on
-            gnn-serving-github-actions-deploy
+            the IAM role for this project's GitHub Actions deploy
           likely no longer matches this repository's owner/name (e.g. after a
           repo rename or first-time setup in a fork).
 
           Recovery (one-shot, local): with gnn-deployer AWS creds,
-            cd infra
-            npx cdk deploy GithubOidcStack \
-              --context githubRepo=$(gh repo view --json nameWithOwner -q .nameWithOwner) \
-              --require-approval never
+            sh scripts/bootstrap_new_deploy_ci.sh $(gh repo view --json nameWithOwner -q .nameWithOwner) <project_name>
 
           See README "First-time setup / repo rename recovery" for details.
           EOF
@@ -294,12 +295,13 @@ jobs:
       - name: Print deployment URLs
         run: |
           SUFFIX="${{ needs.prep.outputs.SUFFIX }}"
+          PASCAL_PROJECT="${{ needs.prep.outputs.PASCAL_PROJECT }}"
           ALB=$(aws cloudformation describe-stacks \
-            --stack-name "SecureGnnDispatcherStack${SUFFIX}" \
+            --stack-name "${PASCAL_PROJECT}DispatcherStack${SUFFIX}" \
             --query 'Stacks[0].Outputs[?OutputKey==`AlbDnsName`].OutputValue' \
             --output text)
           CDN=$(aws cloudformation describe-stacks \
-            --stack-name "SecureGnnDispatcherStack${SUFFIX}" \
+            --stack-name "${PASCAL_PROJECT}DispatcherStack${SUFFIX}" \
             --query 'Stacks[0].Outputs[?OutputKey==`CdnDomain`].OutputValue' \
             --output text)
           echo "### Deployment URLs" >> "$GITHUB_STEP_SUMMARY"
@@ -327,8 +329,9 @@ jobs:
         if: needs.prep.outputs.ENV_NAME != 'prod'
         run: |
           SUFFIX="${{ needs.prep.outputs.SUFFIX }}"
+          PASCAL_PROJECT="${{ needs.prep.outputs.PASCAL_PROJECT }}"
           ALB=$(aws cloudformation describe-stacks \
-            --stack-name "SecureGnnDispatcherStack${SUFFIX}" \
+            --stack-name "${PASCAL_PROJECT}DispatcherStack${SUFFIX}" \
             --query 'Stacks[0].Outputs[?OutputKey==`AlbDnsName`].OutputValue' \
             --output text)
           curl -fsS "http://${ALB}/healthz" | jq -e --arg sha "${{ github.sha }}" '.sha == $sha' \
@@ -375,15 +378,12 @@ jobs:
         run: |
           cat <<'EOF' >&2
           OIDC role assume failed. The trust policy on
-            gnn-serving-github-actions-deploy
+            the IAM role for this project's GitHub Actions deploy
           likely no longer matches this repository's owner/name (e.g. after a
           repo rename or first-time setup in a fork).
 
           Recovery (one-shot, local): with gnn-deployer AWS creds,
-            cd infra
-            npx cdk deploy GithubOidcStack \
-              --context githubRepo=$(gh repo view --json nameWithOwner -q .nameWithOwner) \
-              --require-approval never
+            sh scripts/bootstrap_new_deploy_ci.sh $(gh repo view --json nameWithOwner -q .nameWithOwner) <project_name>
 
           See README "First-time setup / repo rename recovery" for details.
           EOF
