@@ -197,6 +197,16 @@ if [ -z "$DEPLOY_ROLE_ARN" ]; then
   exit 1
 fi
 
+case "$DEPLOY_ROLE_ARN" in
+  arn:aws:iam::*:role/*) ;;
+  *)
+    printf 'Error: DeployRoleArn output is not a full IAM role ARN: %s\n' "$DEPLOY_ROLE_ARN" >&2
+    printf '       Expected pattern: arn:aws:iam::<account>:role/<name>\n' >&2
+    printf '       Refusing to set GitHub secret with a non-ARN value.\n' >&2
+    exit 1
+    ;;
+esac
+
 printf 'DeployRoleArn: %s\n\n' "$DEPLOY_ROLE_ARN"
 
 # ---------------------------------------------------------------------------
