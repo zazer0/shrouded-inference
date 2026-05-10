@@ -50,15 +50,36 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Validate AWS_DEPLOY_ROLE_ARN secret shape
+        id: validate_arn
+        env:
+          ROLE_ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          case "$ROLE_ARN" in
+            arn:aws:iam::*:role/*)
+              printf 'AWS_DEPLOY_ROLE_ARN: valid full ARN (%d chars)\n' "${#ROLE_ARN}"
+              echo "valid=true" >> "$GITHUB_OUTPUT"
+              ;;
+            '')
+              printf '::error::AWS_DEPLOY_ROLE_ARN is EMPTY — secret not set. Run bootstrap.\n'
+              echo "valid=false" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              printf '::error::AWS_DEPLOY_ROLE_ARN is %d chars and does NOT match arn:aws:iam::*:role/* — run bootstrap to set correct ARN\n' "${#ROLE_ARN}"
+              echo "valid=false" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
       - uses: aws-actions/configure-aws-credentials@v4
         id: aws_auth
+        if: steps.validate_arn.outputs.valid == 'true'
         continue-on-error: true
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: us-west-2
 
       - name: OIDC remediation hint
-        if: steps.aws_auth.outcome == 'failure'
+        if: steps.validate_arn.outputs.valid == 'false' || steps.aws_auth.outcome == 'failure'
         run: |
           cat <<'EOF' >&2
           OIDC credential exchange failed. Likely causes (in order of frequency):
@@ -121,15 +142,36 @@ jobs:
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android /opt/hostedtoolcache
           df -h /
 
+      - name: Validate AWS_DEPLOY_ROLE_ARN secret shape
+        id: validate_arn
+        env:
+          ROLE_ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          case "$ROLE_ARN" in
+            arn:aws:iam::*:role/*)
+              printf 'AWS_DEPLOY_ROLE_ARN: valid full ARN (%d chars)\n' "${#ROLE_ARN}"
+              echo "valid=true" >> "$GITHUB_OUTPUT"
+              ;;
+            '')
+              printf '::error::AWS_DEPLOY_ROLE_ARN is EMPTY — secret not set. Run bootstrap.\n'
+              echo "valid=false" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              printf '::error::AWS_DEPLOY_ROLE_ARN is %d chars and does NOT match arn:aws:iam::*:role/* — run bootstrap to set correct ARN\n' "${#ROLE_ARN}"
+              echo "valid=false" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
       - uses: aws-actions/configure-aws-credentials@v4
         id: aws_auth
+        if: steps.validate_arn.outputs.valid == 'true'
         continue-on-error: true
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: us-west-2
 
       - name: OIDC remediation hint
-        if: steps.aws_auth.outcome == 'failure'
+        if: steps.validate_arn.outputs.valid == 'false' || steps.aws_auth.outcome == 'failure'
         run: |
           cat <<'EOF' >&2
           OIDC credential exchange failed. Likely causes (in order of frequency):
@@ -283,15 +325,36 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Validate AWS_DEPLOY_ROLE_ARN secret shape
+        id: validate_arn
+        env:
+          ROLE_ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          case "$ROLE_ARN" in
+            arn:aws:iam::*:role/*)
+              printf 'AWS_DEPLOY_ROLE_ARN: valid full ARN (%d chars)\n' "${#ROLE_ARN}"
+              echo "valid=true" >> "$GITHUB_OUTPUT"
+              ;;
+            '')
+              printf '::error::AWS_DEPLOY_ROLE_ARN is EMPTY — secret not set. Run bootstrap.\n'
+              echo "valid=false" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              printf '::error::AWS_DEPLOY_ROLE_ARN is %d chars and does NOT match arn:aws:iam::*:role/* — run bootstrap to set correct ARN\n' "${#ROLE_ARN}"
+              echo "valid=false" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
       - uses: aws-actions/configure-aws-credentials@v4
         id: aws_auth
+        if: steps.validate_arn.outputs.valid == 'true'
         continue-on-error: true
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: us-west-2
 
       - name: OIDC remediation hint
-        if: steps.aws_auth.outcome == 'failure'
+        if: steps.validate_arn.outputs.valid == 'false' || steps.aws_auth.outcome == 'failure'
         run: |
           cat <<'EOF' >&2
           OIDC credential exchange failed. Likely causes (in order of frequency):
@@ -411,15 +474,36 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Validate AWS_DEPLOY_ROLE_ARN secret shape
+        id: validate_arn
+        env:
+          ROLE_ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          case "$ROLE_ARN" in
+            arn:aws:iam::*:role/*)
+              printf 'AWS_DEPLOY_ROLE_ARN: valid full ARN (%d chars)\n' "${#ROLE_ARN}"
+              echo "valid=true" >> "$GITHUB_OUTPUT"
+              ;;
+            '')
+              printf '::error::AWS_DEPLOY_ROLE_ARN is EMPTY — secret not set. Run bootstrap.\n'
+              echo "valid=false" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              printf '::error::AWS_DEPLOY_ROLE_ARN is %d chars and does NOT match arn:aws:iam::*:role/* — run bootstrap to set correct ARN\n' "${#ROLE_ARN}"
+              echo "valid=false" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
       - uses: aws-actions/configure-aws-credentials@v4
         id: aws_auth
+        if: steps.validate_arn.outputs.valid == 'true'
         continue-on-error: true
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: us-west-2
 
       - name: OIDC remediation hint
-        if: steps.aws_auth.outcome == 'failure'
+        if: steps.validate_arn.outputs.valid == 'false' || steps.aws_auth.outcome == 'failure'
         run: |
           cat <<'EOF' >&2
           OIDC credential exchange failed. Likely causes (in order of frequency):
