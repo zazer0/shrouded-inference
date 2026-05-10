@@ -1,9 +1,14 @@
 #!/bin/sh
 # bootstrap_new_deploy_ci.sh — Wire up a GitHub repo + AWS account to this project's deploy pipeline.
 #
-# Usage: bootstrap_new_deploy_ci.sh <github_owner/repo> <project_name> [<aws_region>]
+# Usage:
+#   bootstrap_new_deploy_ci.sh <project_name> [<aws_region>]
+#   bootstrap_new_deploy_ci.sh <github_owner/repo> <project_name> [<aws_region>]
 #
-#   <github_owner/repo>  GitHub repo to scope the OIDC trust policy to (e.g., zazer0/temp-shrouded-inference)
+#   <github_owner/repo>  Optional. GitHub repo to scope the OIDC trust policy to
+#                        (e.g., zazer0/temp-shrouded-inference). If omitted, it
+#                        is auto-detected from .git/config (origin remote) and
+#                        then `gh repo view` as a fallback.
 #   <project_name>       AWS resource namespace (e.g., shrouded-inference). Must match [a-z0-9-]+.
 #   [<aws_region>]       Optional, default us-west-2.
 #
@@ -18,25 +23,35 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # ---------------------------------------------------------------------------
-# Argument validation
+# Argument parsing — github_owner/repo is optional and auto-detected
 # ---------------------------------------------------------------------------
-if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
-  printf 'Usage: %s <github_owner/repo> <project_name> [<aws_region>]\n' "$0" >&2
+# Forms:
+#   bootstrap_new_deploy_ci.sh <project_name> [<aws_region>]
+#   bootstrap_new_deploy_ci.sh <github_owner/repo> <project_name> [<aws_region>]
+# Disambiguated by whether arg1 contains a `/`.
+if [ "$#" -lt 1 ] || [ "$#" -gt 3 ]; then
+  printf 'Usage: %s <project_name> [<aws_region>]\n' "$0" >&2
+  printf '       %s <github_owner/repo> <project_name> [<aws_region>]\n' "$0" >&2
   exit 1
 fi
 
-GITHUB_REPO="$1"
-PROJECT_NAME="$2"
-AWS_REGION="${3:-us-west-2}"
-
-# Validate GITHUB_REPO contains a slash
-case "$GITHUB_REPO" in
-  */*) ;;
+case "$1" in
+  */*)
+    GITHUB_REPO="$1"
+    PROJECT_NAME="${2:-}"
+    AWS_REGION="${3:-us-west-2}"
+    ;;
   *)
-    printf 'Error: <github_owner/repo> must contain a slash (e.g., zazer0/my-repo). Got: %s\n' "$GITHUB_REPO" >&2
-    exit 1
+    GITHUB_REPO=""
+    PROJECT_NAME="$1"
+    AWS_REGION="${2:-us-west-2}"
     ;;
 esac
+
+if [ -z "$PROJECT_NAME" ]; then
+  printf 'Error: <project_name> is required.\n' >&2
+  exit 1
+fi
 
 # Validate PROJECT_NAME matches [a-z0-9-]+
 case "$PROJECT_NAME" in
@@ -44,11 +59,65 @@ case "$PROJECT_NAME" in
     printf 'Error: <project_name> must match [a-z0-9-]+. Got: %s\n' "$PROJECT_NAME" >&2
     exit 1
     ;;
-  '')
-    printf 'Error: <project_name> must not be empty.\n' >&2
+esac
+
+# Autodetect github_owner/repo if not provided.
+if [ -z "$GITHUB_REPO" ]; then
+  # 1) Parse .git/config for the origin remote URL.
+  if [ -f "$REPO_ROOT/.git/config" ]; then
+    origin_url="$(awk '
+      /^\[remote "origin"\]/ {in_section=1; next}
+      /^\[/                  {in_section=0}
+      in_section && $1=="url" {print $3; exit}
+    ' "$REPO_ROOT/.git/config")"
+    case "$origin_url" in
+      git@github.com:*)
+        GITHUB_REPO="${origin_url#git@github.com:}"
+        GITHUB_REPO="${GITHUB_REPO%.git}"
+        ;;
+      https://github.com/*)
+        GITHUB_REPO="${origin_url#https://github.com/}"
+        GITHUB_REPO="${GITHUB_REPO%.git}"
+        ;;
+      ssh://git@github.com/*)
+        GITHUB_REPO="${origin_url#ssh://git@github.com/}"
+        GITHUB_REPO="${GITHUB_REPO%.git}"
+        ;;
+    esac
+  fi
+
+  # 2) Fall back to `gh` CLI.
+  if [ -z "$GITHUB_REPO" ] && command -v gh >/dev/null 2>&1; then
+    GITHUB_REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || true)"
+  fi
+
+  # 3) Give up — require the user to pass it.
+  if [ -z "$GITHUB_REPO" ]; then
+    printf 'Error: could not auto-detect <github_owner/repo>.\n' >&2
+    printf '       Tried: .git/config (origin remote), then "gh repo view".\n' >&2
+    printf '       Pass it as the first arg.\n' >&2
+    exit 1
+  fi
+
+  printf 'Auto-detected GitHub repo: %s\n' "$GITHUB_REPO"
+fi
+
+# Validate GITHUB_REPO contains a slash (handles bad autodetect or bad explicit input)
+case "$GITHUB_REPO" in
+  */*) ;;
+  *)
+    printf 'Error: <github_owner/repo> must contain a slash. Got: %s\n' "$GITHUB_REPO" >&2
     exit 1
     ;;
 esac
+
+# Force CDK and AWS CLI to agree on region. Without these exports CDK reads
+# CDK_DEFAULT_REGION from the caller's shell (often diverging from AWS_REGION),
+# while Step 4's `describe-stacks --region "$AWS_REGION"` looks elsewhere ->
+# silent split-region failures.
+export AWS_REGION
+export AWS_DEFAULT_REGION="$AWS_REGION"
+export CDK_DEFAULT_REGION="$AWS_REGION"
 
 printf 'Bootstrap starting...\n'
 printf '  GitHub repo:  %s\n' "$GITHUB_REPO"
@@ -75,21 +144,31 @@ jq --arg name "$PROJECT_NAME" '.context.projectName = $name' "$CDK_JSON" > "$CDK
 printf 'cdk.json updated.\n\n'
 
 # ---------------------------------------------------------------------------
-# Step 2 — Derive PascalCase stack name
+# Step 2 — Derive the two distinct names CDK vs CloudFormation each need
 # ---------------------------------------------------------------------------
+# `cdk deploy <id>` matches by *construct id* — the first arg passed to
+# `new GithubOidcStack(app, '<id>', ...)` in infra/bin/infra.ts. In prod
+# (the only env this script supports) that id is the literal "GithubOidcStack".
+CDK_STACK_ID="GithubOidcStack"
+
+# `aws cloudformation describe-stacks --stack-name <n>` wants the *physical*
+# stack name from the stack's `stackName` prop, which infra.ts builds as
+# `${pascalProjectName}GithubOidcStack`.
 PASCAL_PROJECT="$(printf '%s' "$PROJECT_NAME" \
   | awk -F- '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)} 1' OFS='')"
-STACK_NAME="${PASCAL_PROJECT}GithubOidcStack"
+CFN_STACK_NAME="${PASCAL_PROJECT}GithubOidcStack"
 
-printf 'Derived stack name: %s\n\n' "$STACK_NAME"
+printf 'CDK construct id (for cdk deploy):     %s\n' "$CDK_STACK_ID"
+printf 'CFN stack name  (for describe-stacks): %s\n\n' "$CFN_STACK_NAME"
 
 # ---------------------------------------------------------------------------
-# Step 3 — Deploy the OIDC stack
+# Step 3 — Deploy the OIDC stack (matched by CDK construct id, not CFN name)
 # ---------------------------------------------------------------------------
-printf 'Deploying %s...\n' "$STACK_NAME"
+printf 'Deploying construct %s (CFN stack: %s) in %s...\n' \
+  "$CDK_STACK_ID" "$CFN_STACK_NAME" "$AWS_REGION"
 
 cd "$REPO_ROOT/infra"
-npx cdk deploy "$STACK_NAME" \
+npx cdk deploy "$CDK_STACK_ID" \
   --context githubRepo="$GITHUB_REPO" \
   --context projectName="$PROJECT_NAME" \
   --require-approval never
@@ -101,12 +180,10 @@ printf '\nCDK deploy complete.\n\n'
 # ---------------------------------------------------------------------------
 printf 'Reading DeployRoleArn from CloudFormation stack outputs...\n'
 
-# Derive the CloudFormation stack name CDK uses: it is the CDK stack ID (same as STACK_NAME here)
-# CDK names the CF stack as <stackId> when no env prefix is present.
 # Query all outputs as JSON and extract DeployRoleArn with jq to avoid JMESPath backtick
 # literals, which shellcheck SC2016 flags as potential unintended expansions.
 DEPLOY_ROLE_ARN="$(aws cloudformation describe-stacks \
-  --stack-name "$STACK_NAME" \
+  --stack-name "$CFN_STACK_NAME" \
   --region "$AWS_REGION" \
   --query "Stacks[0].Outputs" \
   --output json \
@@ -116,7 +193,7 @@ DEPLOY_ROLE_ARN="$(aws cloudformation describe-stacks \
 # Step 5 — Validate the ARN
 # ---------------------------------------------------------------------------
 if [ -z "$DEPLOY_ROLE_ARN" ]; then
-  printf 'Error: DeployRoleArn output not found in stack %s. Check the CDK stack definition.\n' "$STACK_NAME" >&2
+  printf 'Error: DeployRoleArn output not found in stack %s. Check the CDK stack definition.\n' "$CFN_STACK_NAME" >&2
   exit 1
 fi
 
