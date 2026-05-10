@@ -60,6 +60,9 @@ sh scripts/bootstrap_new_deploy_ci.sh <github_owner/repo> <project_name>
 1. Deploys the OIDC stack and sets `AWS_DEPLOY_ROLE_ARN` on the GitHub repo.
 2. Seeds model artifacts — downloads the EquiformerV2 checkpoint via `uv` + fairchem, repacks it,
    and uploads both `graphsage/model-v2.tar.gz` and `equiformer/model-v2.tar.gz` into the project S3 bucket.
+3. Bootstraps API keys — generates fresh `small` and `large` tier keys, stores them in
+   `${project_name}/raw-api-keys`, and writes hashed entries into `${project_name}/api-keys`.
+   Retrieve keys anytime with `sh scripts/print_apikeys.sh`.
 
 All steps are idempotent; re-running is safe.
 

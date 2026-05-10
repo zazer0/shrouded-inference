@@ -260,6 +260,19 @@ if ! sh "$REPO_ROOT/scripts/first_time_setup_models.sh" "$AWS_REGION"; then
 fi
 
 # ---------------------------------------------------------------------------
+# Step 8 — Bootstrap API keys (idempotent)
+# ---------------------------------------------------------------------------
+printf 'Bootstrapping API keys in Secrets Manager...\n'
+
+if ! sh "$REPO_ROOT/scripts/bootstrap_api_keys.sh" "$AWS_REGION"; then
+  printf 'Error: API key bootstrap failed. Resolve the error above, then re-run:\n' >&2
+  printf '  sh scripts/bootstrap_api_keys.sh %s\n' "$AWS_REGION" >&2
+  exit 1
+fi
+
+printf 'API keys bootstrapped.\n\n'
+
+# ---------------------------------------------------------------------------
 # Completion message + follow-up checklist
 # ---------------------------------------------------------------------------
 printf 'Bootstrap complete.\n'
@@ -268,7 +281,8 @@ printf 'Role ARN:    %s\n' "$DEPLOY_ROLE_ARN"
 printf 'GitHub repo: %s\n' "$GITHUB_REPO"
 printf 'Secret set:  AWS_DEPLOY_ROLE_ARN on %s\n' "$GITHUB_REPO"
 printf 'Artifacts:   graphsage + equiformer seeded into S3\n'
+printf 'API keys:    3 tiers bootstrapped in Secrets Manager\n'
 printf '\n'
 printf 'Follow-up steps (one-time, if migrating from an existing pipeline):\n'
 printf '  1. Trigger a push to main on %s — CI will deploy all stacks.\n' "$GITHUB_REPO"
-printf '  2. If migrating API keys: copy raw-api-keys secret to %s/raw-api-keys in Secrets Manager.\n' "$PROJECT_NAME"
+printf '  2. Retrieve your API keys: sh scripts/print_apikeys.sh\n'

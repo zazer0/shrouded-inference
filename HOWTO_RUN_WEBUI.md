@@ -25,16 +25,8 @@ Keys live in AWS Secrets Manager under `<project_name>/raw-api-keys`. With diren
 
 eval "$(direnv export bash)"
 
-```bash
-# small tier (GraphSAGE)
-aws secretsmanager get-secret-value \
-    --secret-id <project_name>/raw-api-keys --region us-west-2 \
-    --query SecretString --output text | jq -r .small
-
-# large tier (EquiformerV2)
-aws secretsmanager get-secret-value \
-    --secret-id <project_name>/raw-api-keys --region us-west-2 \
-    --query SecretString --output text | jq -r .large
+```sh
+sh scripts/print_apikeys.sh
 ```
 
 The secret is a JSON blob with .small and .large fields containing the raw keys. The dispatcher checks the hashed version against `<project_name>/api-keys` (hash→tier mapping).
