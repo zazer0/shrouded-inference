@@ -207,14 +207,14 @@ case "$DEPLOY_ROLE_ARN" in
     ;;
 esac
 
-printf 'DeployRoleArn: %s\n\n' "$DEPLOY_ROLE_ARN"
+printf 'DeployRoleArn: |%s|\n\n' "$DEPLOY_ROLE_ARN"
 
 # ---------------------------------------------------------------------------
 # Step 6 — Set the GitHub secret
 # ---------------------------------------------------------------------------
 printf 'Setting AWS_DEPLOY_ROLE_ARN secret on %s...\n' "$GITHUB_REPO"
 
-printf '%s' "$DEPLOY_ROLE_ARN" | gh secret set AWS_DEPLOY_ROLE_ARN --repo "$GITHUB_REPO" --body -
+gh secret set AWS_DEPLOY_ROLE_ARN --repo "$GITHUB_REPO" --body "$DEPLOY_ROLE_ARN"
 
 printf 'Secret set.\n\n'
 
