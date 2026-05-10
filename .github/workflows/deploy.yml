@@ -61,13 +61,28 @@ jobs:
         if: steps.aws_auth.outcome == 'failure'
         run: |
           cat <<'EOF' >&2
-          OIDC role assume failed. The trust policy on
-            the IAM role for this project's GitHub Actions deploy
-          likely no longer matches this repository's owner/name (e.g. after a
-          repo rename or first-time setup in a fork).
+          OIDC credential exchange failed. Likely causes (in order of frequency):
 
-          Recovery (one-shot, local): with gnn-deployer AWS creds,
-            sh scripts/bootstrap_new_deploy_ci.sh $(gh repo view --json nameWithOwner -q .nameWithOwner) <project_name>
+            1. Secret AWS_DEPLOY_ROLE_ARN is unset, empty, or not a full ARN.
+               Required shape: arn:aws:iam::<account>:role/<name>
+               (The action error "Source Account ID is needed if the Role Name
+               is provided and not the Role Arn" is this case.)
+
+            2. The IAM role's trust policy no longer permits this repository
+               (e.g. after a repo rename, fork, or first-time setup).
+
+            3. The OIDC provider or IAM role does not exist in this account.
+
+          Recovery (one-shot, local) — fixes all three causes idempotently:
+
+            cd <repo-root>
+            set -a && . ./.envrc && set +a    # loads gnn-deployer AWS creds
+            sh scripts/bootstrap_new_deploy_ci.sh <project_name>
+
+          The bootstrap script (a) deploys/updates the OIDC stack, (b) reads
+          DeployRoleArn from CloudFormation, (c) validates it as an ARN, and
+          (d) overwrites the GitHub secret AWS_DEPLOY_ROLE_ARN. Re-running it
+          is safe.
 
           See README "First-time setup / repo rename recovery" for details.
           EOF
@@ -117,13 +132,28 @@ jobs:
         if: steps.aws_auth.outcome == 'failure'
         run: |
           cat <<'EOF' >&2
-          OIDC role assume failed. The trust policy on
-            the IAM role for this project's GitHub Actions deploy
-          likely no longer matches this repository's owner/name (e.g. after a
-          repo rename or first-time setup in a fork).
+          OIDC credential exchange failed. Likely causes (in order of frequency):
 
-          Recovery (one-shot, local): with gnn-deployer AWS creds,
-            sh scripts/bootstrap_new_deploy_ci.sh $(gh repo view --json nameWithOwner -q .nameWithOwner) <project_name>
+            1. Secret AWS_DEPLOY_ROLE_ARN is unset, empty, or not a full ARN.
+               Required shape: arn:aws:iam::<account>:role/<name>
+               (The action error "Source Account ID is needed if the Role Name
+               is provided and not the Role Arn" is this case.)
+
+            2. The IAM role's trust policy no longer permits this repository
+               (e.g. after a repo rename, fork, or first-time setup).
+
+            3. The OIDC provider or IAM role does not exist in this account.
+
+          Recovery (one-shot, local) — fixes all three causes idempotently:
+
+            cd <repo-root>
+            set -a && . ./.envrc && set +a    # loads gnn-deployer AWS creds
+            sh scripts/bootstrap_new_deploy_ci.sh <project_name>
+
+          The bootstrap script (a) deploys/updates the OIDC stack, (b) reads
+          DeployRoleArn from CloudFormation, (c) validates it as an ARN, and
+          (d) overwrites the GitHub secret AWS_DEPLOY_ROLE_ARN. Re-running it
+          is safe.
 
           See README "First-time setup / repo rename recovery" for details.
           EOF
@@ -264,13 +294,28 @@ jobs:
         if: steps.aws_auth.outcome == 'failure'
         run: |
           cat <<'EOF' >&2
-          OIDC role assume failed. The trust policy on
-            the IAM role for this project's GitHub Actions deploy
-          likely no longer matches this repository's owner/name (e.g. after a
-          repo rename or first-time setup in a fork).
+          OIDC credential exchange failed. Likely causes (in order of frequency):
 
-          Recovery (one-shot, local): with gnn-deployer AWS creds,
-            sh scripts/bootstrap_new_deploy_ci.sh $(gh repo view --json nameWithOwner -q .nameWithOwner) <project_name>
+            1. Secret AWS_DEPLOY_ROLE_ARN is unset, empty, or not a full ARN.
+               Required shape: arn:aws:iam::<account>:role/<name>
+               (The action error "Source Account ID is needed if the Role Name
+               is provided and not the Role Arn" is this case.)
+
+            2. The IAM role's trust policy no longer permits this repository
+               (e.g. after a repo rename, fork, or first-time setup).
+
+            3. The OIDC provider or IAM role does not exist in this account.
+
+          Recovery (one-shot, local) — fixes all three causes idempotently:
+
+            cd <repo-root>
+            set -a && . ./.envrc && set +a    # loads gnn-deployer AWS creds
+            sh scripts/bootstrap_new_deploy_ci.sh <project_name>
+
+          The bootstrap script (a) deploys/updates the OIDC stack, (b) reads
+          DeployRoleArn from CloudFormation, (c) validates it as an ARN, and
+          (d) overwrites the GitHub secret AWS_DEPLOY_ROLE_ARN. Re-running it
+          is safe.
 
           See README "First-time setup / repo rename recovery" for details.
           EOF
@@ -377,13 +422,28 @@ jobs:
         if: steps.aws_auth.outcome == 'failure'
         run: |
           cat <<'EOF' >&2
-          OIDC role assume failed. The trust policy on
-            the IAM role for this project's GitHub Actions deploy
-          likely no longer matches this repository's owner/name (e.g. after a
-          repo rename or first-time setup in a fork).
+          OIDC credential exchange failed. Likely causes (in order of frequency):
 
-          Recovery (one-shot, local): with gnn-deployer AWS creds,
-            sh scripts/bootstrap_new_deploy_ci.sh $(gh repo view --json nameWithOwner -q .nameWithOwner) <project_name>
+            1. Secret AWS_DEPLOY_ROLE_ARN is unset, empty, or not a full ARN.
+               Required shape: arn:aws:iam::<account>:role/<name>
+               (The action error "Source Account ID is needed if the Role Name
+               is provided and not the Role Arn" is this case.)
+
+            2. The IAM role's trust policy no longer permits this repository
+               (e.g. after a repo rename, fork, or first-time setup).
+
+            3. The OIDC provider or IAM role does not exist in this account.
+
+          Recovery (one-shot, local) — fixes all three causes idempotently:
+
+            cd <repo-root>
+            set -a && . ./.envrc && set +a    # loads gnn-deployer AWS creds
+            sh scripts/bootstrap_new_deploy_ci.sh <project_name>
+
+          The bootstrap script (a) deploys/updates the OIDC stack, (b) reads
+          DeployRoleArn from CloudFormation, (c) validates it as an ARN, and
+          (d) overwrites the GitHub secret AWS_DEPLOY_ROLE_ARN. Re-running it
+          is safe.
 
           See README "First-time setup / repo rename recovery" for details.
           EOF
