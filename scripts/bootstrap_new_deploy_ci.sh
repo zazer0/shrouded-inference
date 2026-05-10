@@ -14,8 +14,6 @@
 #
 # This script is idempotent: CDK deploy is a no-op if nothing changed; gh secret set overwrites.
 
-set -eu
-
 # ---------------------------------------------------------------------------
 # Resolve REPO_ROOT relative to this script's location
 # ---------------------------------------------------------------------------
@@ -87,8 +85,12 @@ if [ -z "$GITHUB_REPO" ]; then
   fi
 
   # 2) Fall back to `gh` CLI.
-  if [ -z "$GITHUB_REPO" ] && command -v gh >/dev/null 2>&1; then
-    GITHUB_REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || true)"
+  if [ -z "$GITHUB_REPO" ] && command -v gh >/dev/null; then
+    gh_out="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
+    gh_rc=$?
+    if [ "$gh_rc" -eq 0 ]; then
+      GITHUB_REPO="$gh_out"
+    fi
   fi
 
   # 3) Give up — require the user to pass it.
@@ -138,8 +140,14 @@ fi
 printf 'Writing projectName="%s" to %s...\n' "$PROJECT_NAME" "$CDK_JSON"
 
 CDK_JSON_TMP="${CDK_JSON}.bootstrap_tmp"
-jq --arg name "$PROJECT_NAME" '.context.projectName = $name' "$CDK_JSON" > "$CDK_JSON_TMP" \
-  && mv "$CDK_JSON_TMP" "$CDK_JSON"
+if ! jq --arg name "$PROJECT_NAME" '.context.projectName = $name' "$CDK_JSON" > "$CDK_JSON_TMP"; then
+  printf 'Error: jq failed to update %s.\n' "$CDK_JSON" >&2
+  exit 1
+fi
+if ! mv "$CDK_JSON_TMP" "$CDK_JSON"; then
+  printf 'Error: could not replace %s with updated version.\n' "$CDK_JSON" >&2
+  exit 1
+fi
 
 printf 'cdk.json updated.\n\n'
 
@@ -167,11 +175,14 @@ printf 'CFN stack name  (for describe-stacks): %s\n\n' "$CFN_STACK_NAME"
 printf 'Deploying construct %s (CFN stack: %s) in %s...\n' \
   "$CDK_STACK_ID" "$CFN_STACK_NAME" "$AWS_REGION"
 
-cd "$REPO_ROOT/infra"
-npx cdk deploy "$CDK_STACK_ID" \
+cd "$REPO_ROOT/infra" || exit 1
+if ! npx cdk deploy "$CDK_STACK_ID" \
   --context githubRepo="$GITHUB_REPO" \
   --context projectName="$PROJECT_NAME" \
-  --require-approval never
+  --require-approval never; then
+  printf 'Error: cdk deploy %s failed.\n' "$CDK_STACK_ID" >&2
+  exit 1
+fi
 
 printf '\nCDK deploy complete.\n\n'
 
@@ -182,12 +193,25 @@ printf 'Reading DeployRoleArn from CloudFormation stack outputs...\n'
 
 # Query all outputs as JSON and extract DeployRoleArn with jq to avoid JMESPath backtick
 # literals, which shellcheck SC2016 flags as potential unintended expansions.
-DEPLOY_ROLE_ARN="$(aws cloudformation describe-stacks \
+# Split into two steps so each command's exit code can be checked independently.
+CFN_OUTPUTS_JSON="$(aws cloudformation describe-stacks \
   --stack-name "$CFN_STACK_NAME" \
   --region "$AWS_REGION" \
   --query "Stacks[0].Outputs" \
-  --output json \
+  --output json)"
+cfn_rc=$?
+if [ "$cfn_rc" -ne 0 ]; then
+  printf 'Error: aws cloudformation describe-stacks failed (rc=%s).\n' "$cfn_rc" >&2
+  exit 1
+fi
+
+DEPLOY_ROLE_ARN="$(printf '%s' "$CFN_OUTPUTS_JSON" \
   | jq -r '.[] | select(.OutputKey=="DeployRoleArn") | .OutputValue')"
+jq_rc=$?
+if [ "$jq_rc" -ne 0 ]; then
+  printf 'Error: jq failed to parse CloudFormation outputs (rc=%s).\n' "$jq_rc" >&2
+  exit 1
+fi
 
 # ---------------------------------------------------------------------------
 # Step 5 — Validate the ARN
@@ -214,20 +238,37 @@ printf 'DeployRoleArn: |%s|\n\n' "$DEPLOY_ROLE_ARN"
 # ---------------------------------------------------------------------------
 printf 'Setting AWS_DEPLOY_ROLE_ARN secret on %s...\n' "$GITHUB_REPO"
 
-gh secret set AWS_DEPLOY_ROLE_ARN --repo "$GITHUB_REPO" --body "$DEPLOY_ROLE_ARN"
+if ! gh secret set AWS_DEPLOY_ROLE_ARN --repo "$GITHUB_REPO" --body "$DEPLOY_ROLE_ARN"; then
+  printf 'Error: gh secret set failed.\n' >&2
+  exit 1
+fi
 
 printf 'Secret set.\n\n'
+
+# ---------------------------------------------------------------------------
+# Step 7 — Seed model artifacts
+# ---------------------------------------------------------------------------
+printf 'Seeding model artifacts into S3...\n'
+
+export BOOTSTRAP_GITHUB_REPO="$GITHUB_REPO"
+export BOOTSTRAP_PROJECT_NAME="$PROJECT_NAME"
+
+if ! sh "$REPO_ROOT/scripts/first_time_setup_models.sh" "$AWS_REGION"; then
+  printf 'Error: model seeding failed. Resolve the error above, then re-run:\n' >&2
+  printf '  sh scripts/first_time_setup_models.sh %s\n' "$AWS_REGION" >&2
+  exit 1
+fi
 
 # ---------------------------------------------------------------------------
 # Completion message + follow-up checklist
 # ---------------------------------------------------------------------------
 printf 'Bootstrap complete.\n'
 printf '\n'
-printf 'Role ARN:   %s\n' "$DEPLOY_ROLE_ARN"
+printf 'Role ARN:    %s\n' "$DEPLOY_ROLE_ARN"
 printf 'GitHub repo: %s\n' "$GITHUB_REPO"
 printf 'Secret set:  AWS_DEPLOY_ROLE_ARN on %s\n' "$GITHUB_REPO"
+printf 'Artifacts:   graphsage + equiformer seeded into S3\n'
 printf '\n'
 printf 'Follow-up steps (one-time, if migrating from an existing pipeline):\n'
 printf '  1. Trigger a push to main on %s — CI will deploy all stacks.\n' "$GITHUB_REPO"
-printf '  2. If moving model artifacts: aws s3 sync s3://<old_bucket>/ s3://%s-model-artifacts-<account>/\n' "$PROJECT_NAME"
-printf '  3. If migrating API keys: copy raw-api-keys secret to %s/raw-api-keys in Secrets Manager.\n' "$PROJECT_NAME"
+printf '  2. If migrating API keys: copy raw-api-keys secret to %s/raw-api-keys in Secrets Manager.\n' "$PROJECT_NAME"

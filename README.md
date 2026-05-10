@@ -47,14 +47,30 @@ sourced dynamically from `GITHUB_REPOSITORY` at CDK synth time. CI keeps it in s
 1. **First-time setup** — the OIDC role doesn't exist yet.
 2. **After a GitHub repo rename** — the existing trust policy is stale before the next CI run can fix it.
 
-Recovery (one-shot local CLI, with deployer AWS creds already sourced):
+**Prereq:** [`uv`](https://github.com/astral-sh/uv) must be installed (`curl -LsSf https://astral.sh/uv/install.sh | sh`).
+
+Run once, with deployer AWS creds sourced:
 
 ```sh
 sh scripts/bootstrap_new_deploy_ci.sh <github_owner/repo> <project_name>
 ```
 
-`project_name` must match the value in `infra/cdk.json` → `context.projectName`. The script
-deploys the OIDC stack, reads the new role ARN, and sets the `AWS_DEPLOY_ROLE_ARN` GitHub secret
-in one step. Subsequent pushes to `main` keep the trust policy aligned automatically.
+`project_name` must match `infra/cdk.json` → `context.projectName`. The script autonomously:
+
+1. Deploys the OIDC stack and sets `AWS_DEPLOY_ROLE_ARN` on the GitHub repo.
+2. Seeds model artifacts — downloads the EquiformerV2 checkpoint via `uv` + fairchem, repacks it,
+   and uploads both `graphsage/model-v2.tar.gz` and `equiformer/model-v2.tar.gz` into the project S3 bucket.
+
+All steps are idempotent; re-running is safe.
+
+To skip the ~115 MB equiformer download (endpoint falls back to degraded mode):
+
+```sh
+sh scripts/bootstrap_new_deploy_ci.sh <github_owner/repo> <project_name>
+# — then, separately —
+sh scripts/first_time_setup_models.sh --skip-equiformer
+```
+
+Once complete, push to `main` to trigger the full CI deploy of all stacks.
 
 ---
