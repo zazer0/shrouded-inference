@@ -55,7 +55,7 @@ export const storageStack = new StorageStack(app, `StorageStack${suffix}`, {
 // SecretsStack is prod-only. The api-keys secret + the merger CR are owned
 // solely by the prod stack; ephemeral envs import the same `${projectName}/api-keys`
 // secret by name in DispatcherStack. Mirrors the GithubOidcStack prod-only gate
-// at the bottom of this file. See worklog 026 for the regressions this fixes.
+// at the bottom of this file. Prevents ephemeral-env teardown from wiping the shared api-keys secret.
 if (envName === 'prod') {
   new SecretsStack(app, `SecretsStack${suffix}`, {
     stackName: `${pascalProjectName}SecretsStack${suffix}`,

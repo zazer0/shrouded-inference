@@ -60,7 +60,7 @@ export class CoreStack extends cdk.Stack {
     //     it's seeded from the prod bucket by the deploy workflow's
     //     "Seed equiformer artifact" step (.github/workflows/deploy.yml)
     //     before `cdk deploy --all`.
-    // Prod's bucket is populated manually (worklog 011 era); the gate
+    // Prod's equiformer artifact is uploaded out-of-band (file exceeds git's 100 MB limit); the gate
     // ensures CDK does not touch it.
     if (!isProd) {
       new s3deploy.BucketDeployment(this, 'GraphsageArtifacts', {

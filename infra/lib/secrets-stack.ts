@@ -122,7 +122,7 @@ export class SecretsStack extends cdk.Stack {
         Version: '1',
         // Bumped to trigger OnUpdate on the prod deploy that ships the
         // centralized-lifecycle refactor — restores the `all` raw-key that
-        // a non-prod CR's OnDelete previously wiped (worklog 026 #2). The
+        // a prior ephemeral-env teardown's CR OnDelete removed from the shared secret. The
         // OnUpdate handler is idempotent and re-derives `all` from the
         // existing `small` + `large` raw values.
         Revision: 2,
@@ -203,7 +203,7 @@ The 'all' raw key is deterministically DERIVED from the existing
 'small' + 'large' raw keys (sha256 of 'small|large'). This makes
 Create/Update fully idempotent — re-running with the same inputs always
 produces the same 'all' value, which is what restores the regressed
-'all' key (worklog 026 #2) on the next prod deploy.
+'all' key on the next prod deploy, restoring any key removed by a prior ephemeral-env teardown.
 """
 import json
 import hashlib
@@ -299,7 +299,7 @@ def handler(event, context):
 
         if request_type == 'Update':
             # Re-runs on any CR property change (used here to force restoration
-            # after manual incidents — e.g. the worklog 026 #2 wipe). Same
+            # after incidents where a teardown's CR OnDelete removed keys from the shared secret. Same
             # outputs as Create — fully idempotent: always re-derive 'all'
             # from 'small' + 'large' and write back if different. Restores
             # the shared 'all' key whenever it has been removed.

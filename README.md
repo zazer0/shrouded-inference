@@ -1,4 +1,4 @@
-# [priv] shrouded-inference
+# shrouded-inference
 
 A security-focused ML model deployment: with near-zero-cost when idle, and fully anonymized metrics to improve the model(s) - without compromising customers' IP.
 
