@@ -10,7 +10,7 @@
 #                       degraded mode (graceful fallback built into inference.py)
 #
 # Environment variables (optional — set by bootstrap_new_deploy_ci.sh):
-#   BOOTSTRAP_GITHUB_REPO    — owner/repo, e.g. zazer0/temp-shrouded-inference
+#   BOOTSTRAP_GITHUB_REPO    — owner/repo, e.g. zazer0/shrouded-inference
 #   BOOTSTRAP_PROJECT_NAME   — project name already written to cdk.json, e.g. shrouded-inference
 #
 # If those env vars are not set, the script derives them itself.

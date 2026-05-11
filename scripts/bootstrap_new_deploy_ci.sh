@@ -6,7 +6,7 @@
 #   bootstrap_new_deploy_ci.sh <github_owner/repo> <project_name> [<aws_region>]
 #
 #   <github_owner/repo>  Optional. GitHub repo to scope the OIDC trust policy to
-#                        (e.g., zazer0/temp-shrouded-inference). If omitted, it
+#                        (e.g., zazer0/shrouded-inference). If omitted, it
 #                        is auto-detected from .git/config (origin remote) and
 #                        then `gh repo view` as a fallback.
 #   <project_name>       AWS resource namespace (e.g., shrouded-inference). Must match [a-z0-9-]+.
