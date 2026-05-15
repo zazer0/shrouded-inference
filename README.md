@@ -38,8 +38,3 @@ In scope:
 - Operator visibility — admin access reads ciphertext, not customer data; key access is logged
 - PR-env blast radius — each ephemeral environment has its own separate encryption key
 
-## First-time setup
-
-See [FIRST_TIME_SETUP.md](FIRST_TIME_SETUP.md).
-
----
