@@ -3,6 +3,8 @@ name: Deploy
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '*.md'
   pull_request:
     types: [opened, synchronize, reopened, closed]
   workflow_dispatch:
