@@ -10,7 +10,7 @@ Scroll down ⬇️ for **full system architecture** diagram!
 - **Both tiers idle at zero** — pay for inference time, not standby; ~$25/mo idle baseline
 - **One reusable building block for all tiers** — adding a new tier is a five-line diff
 - **Async by default** — no synchronous timeout to violate, which is what enables scale-to-zero
-- **Raw inputs never touch disk** — fingerprinted in memory, then discarded
+- **Raw IP never persisted** — encrypted with Customer Key to process, and auto-wiped afterwards
 - **Customer data unreadable to operators** — encryption keys held by the running app only; admin storage access sees ciphertext
 - **Feedback is binary, not labeled** — approve / regenerate is the entire training signal
 
@@ -38,7 +38,7 @@ High-Level Flow:
 - Upon a customer request, the right GNN is routed to (a fast cheap one or a slow powerful one)
 - Answer is returned, and option to confirm if they were happy with it.
     - If request re-sent within 2min, customer assumed unhappy with that generation.
-- It never keeps a copy of what they asked, and the models themselves stay locked down.
+- Customer inputs encrypted, auto-wiped after processing — models themselves stay locked down.
 
 ---
 
