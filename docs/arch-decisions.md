@@ -2,6 +2,8 @@
 
 Companion to the [project README](../README.md). This covers the design tradeoffs, the components themselves, and what would change with more time.
 
+Scroll down ⬇️ for **full system architecture** diagram!
+
 ## Design decisions
 
 - **Two model tiers, not one** — different cost profiles, priced independently, GPU billed only when in use
