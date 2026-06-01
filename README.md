@@ -2,9 +2,9 @@
 
 A security-focused ML model deployment: with near-zero-cost when idle, and fully anonymized metrics to improve the model(s) - without compromising customers' IP.
 
-Simplified User Story Architecture:
+User Story Architecture (Simplified):
 <p align="center">
-  <img src="./docs/data-boundary.svg" alt="Architecture" width="100%" />
+  <img src="./docs/data-boundary.svg" alt="Simplified Architecture" width="100%" />
 </p>
 
 Full Architecture and rationale: [docs/arch-decisions.md](docs/arch-decisions.md).
